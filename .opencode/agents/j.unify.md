@@ -84,10 +84,10 @@ UNIFY must NOT perform first-time code integration or merge arbitrary branches/w
 
 For each write target (`$REPO_ROOT`), read `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json` and treat it as the only source of truth for task commit bookkeeping and cleanup.
 
-If cleanup is enabled:
+If cleanup is enabled (run via the Bash tool with `workdir="$REPO_ROOT"`):
 ```bash
-sh .opencode/scripts/harness-feature-integration.sh switch {feature-slug}
-sh .opencode/scripts/harness-feature-integration.sh cleanup {feature-slug}
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch {feature-slug}
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh cleanup {feature-slug}
 ```
 
 ### Step 6.5 — Commit Feature Artifacts (if enabled)
@@ -111,8 +111,13 @@ Determine the PR body source:
 - If `docs/specs/{feature-slug}/spec.md` exists, use it as the basis
 - If no spec exists, use `docs/specs/{feature-slug}/plan.md` goal and task summaries
 
+Run **one PR per write target**. `gh` resolves the repo from the CWD git remote by default — to avoid creating a PR in the wrong remote (or in the workspace remote, which is meaningless), every invocation must pass `--repo {owner}/{project}` derived from the writeTarget being unified.
+
+For each write target, derive `{owner}/{project}` from `writeTargets[].project` (already in `owner/project` form). Run via the Bash tool with `workdir="$REPO_ROOT"`:
+
 ```bash
 gh pr create \
+  --repo {owner}/{project} \
   --title "feat({scope}): {feature description from plan goal}" \
   --body "$(cat <<'EOF'
 ## Summary

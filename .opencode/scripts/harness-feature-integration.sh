@@ -1,8 +1,113 @@
 #!/bin/sh
 set -e
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT_DIR"
+# harness-feature-integration.sh
+#
+# Dual-mode invocation:
+#   single-target (default): operates on $TARGET_REPO_ROOT (env) or the repo
+#     resolved from CWD via _resolve-repo.sh. All 11 subcommands supported.
+#   --all-targets: iterates every writeTargets[].targetRepoRoot from the
+#     workspace's .opencode/state/active-plan.json, re-invoking the script
+#     with TARGET_REPO_ROOT set per target. Whitelisted subcommands only:
+#     ensure, switch, cleanup. Logs "[ok|fail] <project>" per target,
+#     continues on partial failure, exits non-zero if any target failed.
+#
+# Refuses to operate on workspace git unless ALLOW_WORKSPACE_GIT=1
+# (enforced by _resolve-repo.sh in single-target mode).
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+WORKSPACE_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
+ACTIVE_PLAN_JSON="$WORKSPACE_ROOT/.opencode/state/active-plan.json"
+
+if [ "${1:-}" = "--all-targets" ]; then
+  shift
+  __subcmd="${1:-}"
+  case "$__subcmd" in
+    ensure|switch|cleanup) ;;
+    "")
+      echo "[juninho:feature-integration] --all-targets requires a subcommand (ensure|switch|cleanup)" >&2
+      exit 1
+      ;;
+    *)
+      echo "[juninho:feature-integration] --all-targets only supports: ensure, switch, cleanup (got: $__subcmd)" >&2
+      exit 1
+      ;;
+  esac
+
+  if [ ! -f "$ACTIVE_PLAN_JSON" ]; then
+    echo "[juninho:feature-integration] No active-plan.json at $ACTIVE_PLAN_JSON" >&2
+    exit 1
+  fi
+
+  # Extract writeTargets[].{project,targetRepoRoot} as TAB-separated rows.
+  __rows="$(
+    if command -v node >/dev/null 2>&1; then
+      node -e '
+        const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf-8"));
+        const rows = (j.writeTargets || [])
+          .filter(w => w && w.targetRepoRoot)
+          .map(w => (w.project || w.targetRepoRoot) + "\t" + w.targetRepoRoot);
+        process.stdout.write(rows.join("\n"));
+      ' "$ACTIVE_PLAN_JSON"
+    elif command -v bun >/dev/null 2>&1; then
+      bun -e '
+        const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf-8"));
+        const rows = (j.writeTargets || [])
+          .filter(w => w && w.targetRepoRoot)
+          .map(w => (w.project || w.targetRepoRoot) + "\t" + w.targetRepoRoot);
+        process.stdout.write(rows.join("\n"));
+      ' "$ACTIVE_PLAN_JSON"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 -c '
+import json, sys
+j = json.load(open(sys.argv[1]))
+rows = []
+for w in j.get("writeTargets", []) or []:
+    root = (w or {}).get("targetRepoRoot")
+    if not root: continue
+    project = (w or {}).get("project") or root
+    rows.append(project + "\t" + root)
+sys.stdout.write("\n".join(rows))
+' "$ACTIVE_PLAN_JSON"
+    fi
+  )"
+
+  if [ -z "$__rows" ]; then
+    echo "[juninho:feature-integration] No writeTargets[].targetRepoRoot found in $ACTIVE_PLAN_JSON" >&2
+    exit 1
+  fi
+
+  # Use a tempfile counter so failures inside the subshell `while` survive.
+  __failure_counter="$(mktemp)"
+  printf '0' >"$__failure_counter"
+  trap 'rm -f "$__failure_counter"' EXIT
+
+  __tab="$(printf '\t')"
+  printf '%s\n' "$__rows" | while IFS="$__tab" read -r __project __target_root; do
+    [ -z "$__target_root" ] && continue
+    if TARGET_REPO_ROOT="$__target_root" sh "$0" "$@" >/dev/null 2>&1; then
+      echo "[ok]   $__project"
+    else
+      __status=$?
+      echo "[fail] $__project (exit $__status)" >&2
+      __cur="$(cat "$__failure_counter")"
+      printf '%s' "$((__cur + 1))" >"$__failure_counter"
+    fi
+  done
+
+  __failures="$(cat "$__failure_counter")"
+  rm -f "$__failure_counter"
+  trap - EXIT
+  if [ "${__failures:-0}" != "0" ]; then
+    echo "[juninho:feature-integration] $__failures target(s) failed" >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+# Single-target mode: source resolver helper, then proceed unchanged.
+. "$SCRIPT_DIR/_resolve-repo.sh"
+ROOT_DIR="$TARGET_REPO_ROOT"
 TAB="$(printf '	')"
 
 if command -v node >/dev/null 2>&1; then
@@ -116,7 +221,7 @@ manifest_path() {
 }
 
 ensure_manifest_dir() {
-  sh "$ROOT_DIR/.opencode/scripts/scaffold-spec-state.sh" "$1"
+  TARGET_REPO_ROOT="$ROOT_DIR" sh "$WORKSPACE_ROOT/.opencode/scripts/scaffold-spec-state.sh" "$1"
 }
 
 json_read_field() {
@@ -251,7 +356,7 @@ NODE
     [ -f "$manifest" ] || fail "Missing integration manifest: $manifest"
 
     task_branch="$(task_branch_name "$feature_slug" "$task_id")"
-    task_base="$(sh "$0" print-task-base "$feature_slug" "$depends_csv")"
+    task_base="$(TARGET_REPO_ROOT="$ROOT_DIR" sh "$0" print-task-base "$feature_slug" "$depends_csv")"
 
     if [ -n "$worktree_directory" ]; then
       if [ -d "$worktree_directory" ]; then
@@ -301,7 +406,7 @@ NODE
   switch-active)
     feature_slug="$(parse_active_feature_slug)"
     [ -n "$feature_slug" ] || exit 0
-    sh "$0" switch "$feature_slug"
+    TARGET_REPO_ROOT="$ROOT_DIR" sh "$0" switch "$feature_slug"
     ;;
 
   record-task)

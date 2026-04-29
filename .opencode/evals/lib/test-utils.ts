@@ -73,6 +73,7 @@ export function scaffoldHarnessRepo(root: string): void {
     ".opencode/scripts/test-related.sh",
     ".opencode/scripts/run-test-scope.sh",
     ".opencode/scripts/check-all.sh",
+    ".opencode/scripts/_resolve-repo.sh",
     ".opencode/scripts/harness-feature-integration.sh",
     ".opencode/scripts/scaffold-spec-state.sh",
     ".opencode/hooks/pre-commit",

@@ -13,9 +13,11 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 ├── .gitignore              # allowlist: só versiona o que importa para o harness
 ├── AGENTS.md               # contrato global de agentes (carregado automaticamente)
 ├── README.md               # este arquivo
+├── package.json            # CLI utilitário do harness (rodável com `bun <script>`)
 ├── opencode.json           # configuração do runtime opencode
 ├── .opencode/              # HARNESS JUNINHO — o coração deste workspace
 │   ├── agents/             # subagentes especializados (markdown declarativo)
+│   ├── cli/                # scripts TS do CLI utilitário (config, model, plan, state)
 │   ├── commands/           # comandos /j.* expostos no CLI
 │   ├── plugins/            # plugins runtime em TypeScript (hooks do opencode)
 │   ├── lib/                # bibliotecas compartilhadas dos plugins
@@ -43,6 +45,7 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 !.opencode/
 !docs/
 !tmp/
+!package.json
 /tmp/*
 ```
 
@@ -322,6 +325,8 @@ Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos 
 | `reenterImplementOnFullCheckFailure` | `true` | Se `/j.check` falha, reentra em `/j.implement` com o `check-review.md` |
 | `watchdogSessionStale` | `true` no default, `false` aqui | Monitora sessões de child implementer; pode disparar 1 retry |
 | `refreshExecutionHeartbeat` | `false` | Reescreve periodicamente `execution-state.md` para sinalizar vida |
+| `skipLintOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `lint-structure.sh` (útil em repos sem lint configurado) |
+| `skipTestOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `test-related.sh` (útil em repos sem test runner) |
 
 ### 5.5 `workflow.unify`
 
@@ -608,4 +613,135 @@ Os comandos `/j.*` **delegam para subagentes** (`@j.*`) — o orchestrator nunca
 
 ---
 
-> **Nota final:** este workspace é deliberadamente minimalista no que versiona. O valor está no `.opencode/` — é o que torna repetível meu fluxo de desenvolvimento spec-driven com agentes. Tudo o resto (código de produto, builds, dependências) vive nos repositórios filhos.
+## 16. CLI utilitário do harness (`package.json`)
+
+Algumas operações repetitivas no `juninho-config.json` e no `state/` (trocar modelo dos agentes, ativar plano, inspecionar/limpar state) **não exigem uma sessão do opencode**. Pra essas, existe um CLI utilitário em TypeScript rodando direto no [Bun](https://bun.sh) — sem dependências, sem `npm install`, sem `node_modules`.
+
+### 16.1 Pré-requisito
+
+```bash
+bun --version   # já vem instalado neste workspace
+```
+
+> **Por que Bun?** Os plugins/lib/tools do harness já são TypeScript executados pelo opencode em runtime Bun. Reaproveitar o runtime mantém o `package.json` zero-deps. Como Bun aceita scripts customizados sem `run`, a sintaxe fica `bun model:set-strong …` em vez de `npm run model:set-strong …`.
+
+### 16.2 Comandos disponíveis
+
+Todos rodam a partir de `~/repos/`:
+
+| Script | O que faz | Exemplo |
+|--------|-----------|---------|
+| `bun config:show` | Imprime o `juninho-config.json` formatado | `bun config:show` |
+| `bun config:validate` | Valida chaves desconhecidas + tipos básicos | `bun config:validate` |
+| `bun model:list` | Lista modelos `strong/medium/weak` ativos | `bun model:list` |
+| `bun model:set-strong <id>` | Troca o modelo `strong` (usado por planner, implementer, validator…) | `bun model:set-strong github-copilot/claude-opus-4.7` |
+| `bun model:set-medium <id>` | Troca o modelo `medium` | `bun model:set-medium github-copilot/gpt-5.5` |
+| `bun model:set-weak <id>` | Troca o modelo `weak` (explore, librarian) | `bun model:set-weak github-copilot/claude-haiku-4.5` |
+| `bun toggle <key.path> <value>` | Edita qualquer toggle em `workflow.*` (prefixo `workflow.` é inferido se omitido) | `bun toggle unify.createPullRequest true` |
+| `bun plan:active` | Mostra o plano ativo (writeTargets + referenceProjects) | `bun plan:active` |
+| `bun plan:activate <project> <slug>` | Ativa um plano existente em um repo (single write target) | `bun plan:activate olxbr/trp-seller-api seller-creation-service` |
+| `bun plan:clear` | Remove o `state/active-plan.json` | `bun plan:clear` |
+| `bun state:show` | Imprime `active-plan.json` + `execution-state.md` | `bun state:show` |
+| `bun state:clear-task <slug> <task-id>` | Remove o diretório de state de uma task em todos os write targets | `bun state:clear-task seller-creation-service task-5` |
+| `bun skills:list` | Lista todas as skills + descrição | `bun skills:list` |
+| `bun agents:list` | Lista todos os subagentes + descrição | `bun agents:list` |
+
+### 16.3 Caso de uso típico — trocar modelo strong sem abrir sessão
+
+```bash
+cd ~/repos
+bun model:list
+# strong:  github-copilot/gpt-5.5
+# medium:  github-copilot/gpt-5.5
+# weak:    github-copilot/claude-haiku-4.5
+
+bun model:set-strong github-copilot/claude-opus-4.7
+# strong: github-copilot/gpt-5.5 → github-copilot/claude-opus-4.7
+
+bun config:validate
+# config válida
+#   strong:  github-copilot/claude-opus-4.7
+#   ...
+```
+
+Próxima sessão do opencode já pega o modelo novo via `loadJuninhoConfig()` (lib/j.juninho-config.ts).
+
+### 16.4 Caso de uso — desligar criação de PR temporariamente
+
+```bash
+bun toggle unify.createPullRequest false
+# workflow.unify.createPullRequest: true → false
+```
+
+O caminho curto (`unify.createPullRequest`) é expandido automaticamente para `workflow.unify.createPullRequest` quando a primeira parte é uma seção conhecida (`automation`, `implement`, `unify`, `documentation`).
+
+### 16.5 Onde os scripts vivem
+
+- **Definição:** `~/repos/package.json` (`scripts` block — zero deps, zero lockfile).
+- **Implementação:** `~/repos/.opencode/cli/*.ts` — cada script é um arquivo TypeScript pequeno que importa tipos de `lib/j.juninho-config.ts` para garantir consistência com o runtime do harness.
+- **Helper compartilhado:** `~/repos/.opencode/cli/_lib.ts` (read/write JSON, set/get nested paths, parse de valores).
+
+### 16.6 Adicionar um novo script
+
+1. Crie `~/repos/.opencode/cli/<nome>.ts` (use os existentes como template).
+2. Adicione a entrada em `package.json` → `scripts`.
+3. Documente nesta tabela.
+4. Mantenha o critério: **1 script = 1 ação repetitiva**. Se virar canivete suíço, divida.
+
+---
+
+> **Nota final:** este workspace é deliberadamente minimalista no que versiona. O valor está no `.opencode/` (harness) e no `package.json` (CLI utilitário) — é o que torna repetível meu fluxo de desenvolvimento spec-driven com agentes. Tudo o resto (código de produto, builds, dependências) vive nos repositórios filhos.
+
+---
+
+## 17. Shell helpers compartilhados (multi-target / multi-stack)
+
+Os scripts em `.opencode/scripts/` são desenhados para operar em **qualquer write target** do plano ativo (Node, Maven/Java, Terraform), sem que o agente precise saber qual stack está rodando. Três helpers tornam isso possível e ficam disponíveis para qualquer script novo:
+
+### 17.1 `_resolve-repo.sh` — resolução de target repo
+
+```bash
+source "$(dirname "$0")/_resolve-repo.sh"
+resolve_repo "$@"   # exporta WORKSPACE_ROOT, TARGET_REPO_ROOT, ROOT_DIR e faz `cd $ROOT_DIR`
+```
+
+- Aceita `--repo <path>` ou `--target <project>`; sem args, usa o write target atual do `active-plan.json`.
+- Se o target resolvido for o próprio workspace (`~/repos`), exige `ALLOW_WORKSPACE_GIT=1` (proteção contra commit acidental no harness).
+- Substitui o boilerplate de `git rev-parse` espalhado nos scripts antigos.
+
+### 17.2 `_read-config.sh` — leitura tipada do `juninho-config.json`
+
+```bash
+source "$(dirname "$0")/_read-config.sh"
+SKIP_LINT=$(config_get_workflow_bool   "implement.skipLintOnPrecommit" false)
+SCOPE=$(config_get_workflow_string     "implement.preCommitScope"      "related")
+```
+
+- Funções `config_get_workflow_string` e `config_get_workflow_bool` aceitam dotted-path sob `workflow.*` + valor default obrigatório.
+- Parser tenta `node` → `bun` → `python3` na ordem; falha silenciosa retorna o default (não quebra o script).
+- Procura config em `TARGET_REPO_ROOT/.opencode/juninho-config.json` primeiro, caindo para `WORKSPACE_ROOT/.opencode/juninho-config.json`.
+
+### 17.3 `_detect-stack.sh` — detecção de stack via FS markers
+
+```bash
+source "$(dirname "$0")/_detect-stack.sh"
+case "$(detect_stack)" in
+  maven)     "$(maven_runner)" -q -DskipTests verify ;;
+  terraform) terraform fmt -check -recursive && terraform validate ;;
+  node)      npx --no-install vitest run --changed ;;
+  *)         echo "stack desconhecido — pulando"; exit 0 ;;
+esac
+```
+
+- `detect_stack` ecoa `maven|terraform|node|unknown` baseado em markers no CWD: `pom.xml`/`mvnw` → `*.tf` → `package.json` → `unknown`.
+- `maven_runner` retorna `./mvnw` se existir, senão `mvn`.
+- `pom_has_plugin <artifactId>` faz match seguro em `pom.xml` (usado para detectar spotless/checkstyle).
+- Honra `JUNINHO_FORCE_STACK=maven|terraform|node` para testes/CI.
+
+### 17.4 Scripts já adaptados
+
+`lint-structure.sh`, `test-related.sh`, `build-verify.sh`, `run-test-scope.sh`, `pre-commit.sh` e `check-all.sh` usam os três helpers acima. Adicionar suporte a uma nova stack (ex.: Gradle/Kotlin) é trivial: estende-se `detect_stack` + adiciona um `case` em cada script.
+
+### 17.5 `harness-feature-integration.sh --all-targets`
+
+O script de integração de feature aceita `--all-targets <action>` para rodar a mesma ação (`ensure`, `switch`, `cleanup`) em todos os write targets do plano ativo. Útil para preparar/limpar branches `feature/{slug}` em N repos com um comando só.

@@ -1,7 +1,9 @@
 #!/bin/sh
 set -e
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/_resolve-repo.sh"
+ROOT_DIR="$TARGET_REPO_ROOT"
+
 FEATURE_SLUG="${1:-}"
 
 [ -n "$FEATURE_SLUG" ] || {
@@ -10,7 +12,8 @@ FEATURE_SLUG="${1:-}"
 }
 
 STATE_DIR="$ROOT_DIR/docs/specs/$FEATURE_SLUG/state"
-TEMPLATE_PATH="$ROOT_DIR/.opencode/templates/spec-state-readme.md"
+# Templates always live in the workspace harness, never inside the target repo.
+TEMPLATE_PATH="$WORKSPACE_ROOT/.opencode/templates/spec-state-readme.md"
 
 mkdir -p "$STATE_DIR/tasks" "$STATE_DIR/sessions"
 

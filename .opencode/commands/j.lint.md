@@ -7,12 +7,28 @@ This command is only the lint gate. The pre-commit hook then runs `.opencode/scr
 ## Usage
 
 ```
-/j.lint
+/j.lint                 # iterate writeTargets[] from active-plan.json
+/j.lint <repo-path>     # lint a single explicit project
 ```
 
-## What runs
+## Resolution
 
-`.opencode/scripts/lint-structure.sh`
+If `<repo-path>` is provided, lint only that project.
+
+Otherwise:
+1. Read `.opencode/state/active-plan.json`
+2. For every `writeTargets[].targetRepoRoot`, run lint inside that project
+3. Print a single per-target line at the end (PASS/FAIL count)
+
+## What runs (per target)
+
+Run via the Bash tool with `workdir="$REPO_ROOT"`:
+
+```bash
+sh /Users/kleber.motta/repos/.opencode/scripts/lint-structure.sh
+```
+
+The script is workspace-safe: it refuses to operate on the workspace git unless `ALLOW_WORKSPACE_GIT=1`.
 
 ## When to use
 

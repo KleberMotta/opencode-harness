@@ -42,10 +42,10 @@ Do not create or expect feature artifacts in `referenceProjects` unless the plan
 
 ## Step 1 — Run Repo-Wide Checks
 
-Run:
+Run via the Bash tool with `workdir="$REPO_ROOT"`:
 
 ```bash
-sh .opencode/scripts/check-all.sh
+sh /Users/kleber.motta/repos/.opencode/scripts/check-all.sh
 ```
 
 Capture the output exactly.

@@ -5,24 +5,30 @@ Run fast, change-scoped tests during implementation after lint/build gates are g
 ## Usage
 
 ```
-/j.test
-/j.test <pattern>
+/j.test                          # iterate writeTargets[] from active-plan.json
+/j.test <repo-path>              # test a single explicit project
+/j.test <repo-path> <pattern>    # path scope inside the chosen project
 ```
 
-## Examples
+## Resolution
 
+If `<repo-path>` is provided, test only that project. The optional `<pattern>` is resolved relative to that project root.
+
+Otherwise:
+1. Read `.opencode/state/active-plan.json`
+2. For every `writeTargets[].targetRepoRoot`, run tests inside that project
+
+## What runs (per target)
+
+Run via the Bash tool with `workdir="$REPO_ROOT"`:
+
+```bash
+sh /Users/kleber.motta/repos/.opencode/scripts/test-related.sh
 ```
-/j.test
-/j.test src/payments
-/j.test --watch
-```
 
-## What runs
+If the repository defines `test:related`, that script is preferred. Otherwise the default fallback tries tools such as `jest --findRelatedTests` or `vitest related`.
 
-`.opencode/scripts/test-related.sh`
-
-If the repository defines `test:related`, that script is preferred.
-Otherwise the default fallback tries tools such as `jest --findRelatedTests` or `vitest related`.
+The script is workspace-safe: it refuses to operate on the workspace git unless `ALLOW_WORKSPACE_GIT=1`.
 
 ## When to use
 
