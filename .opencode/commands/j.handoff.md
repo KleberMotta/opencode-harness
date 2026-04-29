@@ -25,29 +25,36 @@ Prepare a handoff document for the next session or team member.
    - What still needs bookkeeping or cleanup
    - Exact next step to continue
 
-6. Updates local execution state with handoff notes
+4. Updates local execution state with handoff notes
 
-7. Optionally commits the state files:
-    `git add .opencode/state/ docs/specs/*/state/ && git commit -m "chore: session handoff"`
+## Optional commit step (per target, never workspace-wide)
+
+The optional commit of feature state artifacts must run **inside each write target's git**, not from the workspace. Each project has its own remote and its own `feature/{slug}` branch.
+
+For each write target, run via the Bash tool with `workdir="$REPO_ROOT"`:
+
+```bash
+git add docs/specs/{feature-slug}/state/
+git commit -m "chore({feature-slug}): session handoff"
+```
+
+Do **not** use a glob like `docs/specs/*/state/` from the workspace — it has undefined behavior and will either fail (no such path under workspace git) or stage the wrong files. Always scope to the active feature slug and run per project.
 
 ## Output format
 
 ```markdown
 # Session Handoff — {date}
 
-## Completed
-- [x] Task description
+## Per-target status
 
-## In Progress
-- [ ] Task description
-  - Last state: {what was done}
-  - Next step: {exactly what to do next}
-  - Files: {relevant files}
+### {project-1}
+- Completed: ...
+- In progress: ...
+- Blocked: ...
+- Next step: ...
 
-## Blocked
-- [ ] Task description
-  - Blocker: {what's blocking}
-  - Resolution needed: {what needs to happen}
+### {project-2}
+- ...
 
 ## Next Session: Start with
 {single, clear action to take first}

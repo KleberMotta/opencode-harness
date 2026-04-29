@@ -10,6 +10,8 @@
     },
     "implement": {
       "preCommitScope": "related",
+      "skipLintOnPrecommit": false,
+      "skipTestOnPrecommit": false,
       "postImplementFullCheck": true,
       "reenterImplementOnFullCheckFailure": true,
       "watchdogSessionStale": false,

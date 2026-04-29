@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "fs"
 import path from "path"
 import { featureStateManifestPath, featureStateTaskPaths } from "./j.feature-state-paths"
 import { resolveStateFile } from "./j.state-paths"
+import { loadActivePlanTargets } from "./j.workspace-paths"
 
 type TaskBoardRow = {
   id: string
@@ -24,6 +25,12 @@ function getActiveFeatureSlug(directory: string): string | null {
 
   const content = readFileSync(statePath, "utf-8")
   return content.match(/\*\*Feature slug\*\*:\s*(?:\`)?([^\`\s]+)/)?.[1] ?? null
+}
+
+function slugFromPlanPath(planPath: string | undefined): string | null {
+  if (!planPath) return null
+  const match = planPath.match(/docs\/specs\/([^/]+)\/plan\.md$/)
+  return match?.[1] ?? null
 }
 
 function markdownField(body: string, name: string): string {
@@ -62,13 +69,10 @@ function readRetryCount(retryPath: string): string {
   }
 }
 
-function buildBoard(directory: string): string | null {
-  const slug = getActiveFeatureSlug(directory)
-  if (!slug) return null
-
-  const featureDir = path.join(directory, "docs", "specs", slug)
+function buildBoardForTarget(projectRoot: string, slug: string, projectLabel: string): string | null {
+  const featureDir = path.join(projectRoot, "docs", "specs", slug)
   const planPath = path.join(featureDir, "plan.md")
-  const integrationPath = featureStateManifestPath(directory, slug)
+  const integrationPath = featureStateManifestPath(projectRoot, slug)
   if (!existsSync(planPath)) return null
 
   const planTasks = parsePlan(planPath)
@@ -84,7 +88,7 @@ function buildBoard(directory: string): string | null {
   }
 
   const rows: TaskBoardRow[] = planTasks.map((task) => {
-    const taskPaths = featureStateTaskPaths(directory, slug, task.id)
+    const taskPaths = featureStateTaskPaths(projectRoot, slug, task.id)
     const content = existsSync(taskPaths.statePath) ? readFileSync(taskPaths.statePath, "utf-8") : ""
     const integrationEntry = integrationManifest?.tasks?.[task.id]
 
@@ -106,7 +110,7 @@ function buildBoard(directory: string): string | null {
   })
 
   return [
-    "[task-board] Feature: " + slug,
+    "[task-board] Project: " + projectLabel + " — Feature: " + slug,
     "",
     "| ID | Wave | Depends | Status | Attempt | Retries | Validated Commit | Feature Commit | Integration | Heartbeat | Task |",
     "|----|------|---------|--------|---------|---------|------------------|----------------|-------------|-----------|------|",
@@ -114,6 +118,37 @@ function buildBoard(directory: string): string | null {
       "| " + row.id + " | " + row.wave + " | " + row.depends + " | " + row.status + " | " + row.attempt + " | " + row.retryCount + " | " + row.validatedCommit + " | " + row.featureCommit + " | " + row.integrationStatus + " | " + row.heartbeat + " | " + row.name + " |"
     ),
   ].join("\n")
+}
+
+function buildBoard(directory: string): string | null {
+  const boards: string[] = []
+  const visited = new Set<string>()
+
+  // Multi-target: iterate active-plan write targets.
+  const activeTargets = loadActivePlanTargets(directory)
+  for (const target of activeTargets) {
+    const projectRoot = target.targetRepoRoot
+    const slug = target.slug ?? slugFromPlanPath(target.planPath) ?? undefined
+    if (!projectRoot || !slug) continue
+    const key = projectRoot + "::" + slug
+    if (visited.has(key)) continue
+    visited.add(key)
+    const projectLabel = target.project ?? path.basename(projectRoot)
+    const board = buildBoardForTarget(projectRoot, slug, projectLabel)
+    if (board) boards.push(board)
+  }
+
+  // Fallback: workspace-local layout.
+  if (boards.length === 0) {
+    const slug = getActiveFeatureSlug(directory)
+    if (slug) {
+      const board = buildBoardForTarget(directory, slug, path.basename(directory))
+      if (board) boards.push(board)
+    }
+  }
+
+  if (boards.length === 0) return null
+  return boards.join("\n\n")
 }
 
 export default (async ({ directory }: { directory: string }) => {

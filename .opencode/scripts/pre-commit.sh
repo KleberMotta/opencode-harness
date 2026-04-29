@@ -1,8 +1,10 @@
 #!/bin/sh
 set -e
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT_DIR"
+__SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$__SCRIPT_DIR/_resolve-repo.sh"
+. "$__SCRIPT_DIR/_read-config.sh"
+ROOT_DIR="$TARGET_REPO_ROOT"
 
 JUNINHO_STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACMR)"
 export JUNINHO_STAGED_FILES
@@ -12,10 +14,18 @@ if [ -z "$JUNINHO_STAGED_FILES" ]; then
   exit 0
 fi
 
-echo "[juninho:pre-commit] Running structure lint..."
-"$ROOT_DIR/.opencode/scripts/lint-structure.sh"
+if config_get_workflow_bool implement.skipLintOnPrecommit false; then
+  echo "[juninho:pre-commit] Skipping structure lint (workflow.implement.skipLintOnPrecommit=true)"
+else
+  echo "[juninho:pre-commit] Running structure lint..."
+  TARGET_REPO_ROOT="$ROOT_DIR" "$WORKSPACE_ROOT/.opencode/scripts/lint-structure.sh"
+fi
 
-echo "[juninho:pre-commit] Running related tests..."
-"$ROOT_DIR/.opencode/scripts/test-related.sh"
+if config_get_workflow_bool implement.skipTestOnPrecommit false; then
+  echo "[juninho:pre-commit] Skipping related tests (workflow.implement.skipTestOnPrecommit=true)"
+else
+  echo "[juninho:pre-commit] Running related tests..."
+  TARGET_REPO_ROOT="$ROOT_DIR" "$WORKSPACE_ROOT/.opencode/scripts/test-related.sh"
+fi
 
 echo "[juninho:pre-commit] Local checks passed"

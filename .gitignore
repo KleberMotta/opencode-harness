@@ -9,6 +9,8 @@
 !/docs
 !/tmp
 !README.md
+!/package.json
+!/.github
 
 # Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
 /tmp/*

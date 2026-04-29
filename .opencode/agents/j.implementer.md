@@ -119,11 +119,11 @@ Commit policy:
 - Feature artifact commits, if desired, are handled only by `/j.unify` when `workflow.unify.commitFeatureArtifacts` is `true`.
 - During implementation, write/update state files for traceability, but do not create additional commits solely to persist `docs/specs/{feature-slug}/state/**` changes.
 
-At the start of the feature run, ensure the canonical branch and manifest exist:
+At the start of the feature run, ensure the canonical branch and manifest exist (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh "$REPO_ROOT/.opencode/scripts/harness-feature-integration.sh" ensure "{feature-slug}" "$CURRENT_BRANCH"
-sh "$REPO_ROOT/.opencode/scripts/harness-feature-integration.sh" switch "{feature-slug}"
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh ensure "{feature-slug}" "$CURRENT_BRANCH"
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch "{feature-slug}"
 ```
 
 Before any code edits, the task executor must write task state with:
@@ -326,11 +326,11 @@ Then write `execution-state.md` with:
 
 Append the final task result to `implementer-work.md`.
 
-Then record the task commit:
+Then record the task commit (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh "$REPO_ROOT/.opencode/scripts/harness-feature-integration.sh" record-task "{feature-slug}" "{id}" "feature/{feature-slug}" "$VALIDATED_COMMIT" "{attempt number}" "" "{task description}"
-sh "$REPO_ROOT/.opencode/scripts/harness-feature-integration.sh" integrate-task "{feature-slug}" "{id}"
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh record-task "{feature-slug}" "{id}" "feature/{feature-slug}" "$VALIDATED_COMMIT" "{attempt number}" "" "{task description}"
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh integrate-task "{feature-slug}" "{id}"
 ```
 
 `record-task` arguments are: `<feature-slug> <task-id> <task-branch> <validated-commit> <attempt> [worktree] [label]`. For direct canonical-branch task execution, pass `feature/{feature-slug}` as `<task-branch>`, an empty string for `[worktree]`, and the task description as `[label]`.
@@ -368,17 +368,17 @@ When invoked as a task-scoped worker from `/j.implement-task` or an `Execute tas
 When all tasks in all waves are complete for all write targets:
 
 1. Verify all target-local `task-*/execution-state.md` files show COMPLETE for every write target.
-2. Ensure the current branch is `feature/{feature-slug}`:
+2. Ensure the current branch is `feature/{feature-slug}` (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh "$REPO_ROOT/.opencode/scripts/harness-feature-integration.sh" switch "{feature-slug}"
+sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch "{feature-slug}"
 ```
 
 3. Update `.opencode/state/execution-state.md` only as local session state if still used by the workflow.
 4. Exit cleanly and report:
    - task-level implementation is complete
    - each write target's `docs/specs/{feature-slug}/state/functional-validation-plan.md` is ready for `/j.check`
-   - the caller should run `.opencode/scripts/check-all.sh` or `/j.check` from the canonical feature branch
+   - the caller should run `sh /Users/kleber.motta/repos/.opencode/scripts/check-all.sh` (with `workdir="$REPO_ROOT"`) or `/j.check` from the canonical feature branch
    - if the repo-wide check fails, invoke `@j.implementer` again with the failing output
 
 Before exiting the successful whole-feature run, request one final `j.validator` pass in feature-validation-plan mode for each write target to write:

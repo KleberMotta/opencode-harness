@@ -25,7 +25,8 @@ type ActivePlanReferenceProject = {
   reason?: string
 }
 
-type ActivePlanState = ActivePlanTarget & {
+type ActivePlanState = {
+  slug?: string
   writeTargets?: ActivePlanTarget[]
   targets?: ActivePlanTarget[]
   referenceProjects?: ActivePlanReferenceProject[]
@@ -316,18 +317,8 @@ export function normalizeActivePlanTargets(workspaceRoot: string, state: ActiveP
     : Array.isArray(state.targets)
       ? state.targets
       : []
-  const fallbackTarget = state.planPath || state.specPath || state.contextPath || state.targetRepoRoot
-    ? [{
-      project: state.project,
-      slug: state.slug,
-      planPath: state.planPath,
-      specPath: state.specPath,
-      contextPath: state.contextPath,
-      targetRepoRoot: state.targetRepoRoot,
-    } satisfies ActivePlanTarget]
-    : []
 
-  return directTargets.concat(fallbackTarget)
+  return directTargets
     .map((target) => {
       const targetRepoRoot = target.targetRepoRoot?.trim() || resolveTargetProjectRoot(workspaceRoot, {
         targetRepoRoot: target.targetRepoRoot,
