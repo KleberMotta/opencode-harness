@@ -1,0 +1,36 @@
+{
+  "scripts": {
+    "eval": "node ./evals/run-layer.mjs all",
+    "eval:structural": "node ./evals/run-layer.mjs structural",
+    "eval:hooks": "node ./evals/run-layer.mjs hooks",
+    "eval:context": "node ./evals/run-layer.mjs context",
+    "eval:state": "node ./evals/run-layer.mjs state",
+    "eval:behavioral": "node ./evals/run-behavioral.mjs smoke",
+    "eval:behavioral:smoke": "node ./evals/run-behavioral.mjs smoke",
+    "eval:behavioral:impact:carl": "node ./evals/run-behavioral.mjs impact carl",
+    "eval:behavioral:impact:runtime": "node ./evals/run-behavioral.mjs impact runtime",
+    "eval:behavioral:impact:workflow": "node ./evals/run-behavioral.mjs impact workflow",
+    "eval:behavioral:impact:tools": "node ./evals/run-behavioral.mjs impact tools",
+    "eval:behavioral:context-suite": "node ./evals/run-behavioral.mjs context",
+    "eval:behavioral:workflow-suite": "node ./evals/run-behavioral.mjs workflow",
+    "eval:behavioral:tools-suite": "node ./evals/run-behavioral.mjs tools",
+    "eval:behavioral:full": "node ./evals/run-behavioral.mjs full",
+    "eval:behavioral:context": "JUNINHO_EVAL_OFFSET=0 JUNINHO_EVAL_LIMIT=3 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-context-report.md",
+    "eval:behavioral:tools": "JUNINHO_EVAL_OFFSET=3 JUNINHO_EVAL_LIMIT=3 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-tools-report.md",
+    "eval:behavioral:commit": "JUNINHO_EVAL_OFFSET=6 JUNINHO_EVAL_LIMIT=2 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-commit-report.md",
+    "eval:behavioral:skill-effect": "JUNINHO_EVAL_OFFSET=8 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-skill-effect-report.md",
+    "eval:behavioral:subagent-context": "JUNINHO_EVAL_OFFSET=9 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-subagent-context-report.md",
+    "eval:behavioral:mixed-domain-context": "JUNINHO_EVAL_OFFSET=10 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-mixed-domain-context-report.md",
+    "eval:behavioral:dual-domain-context": "JUNINHO_EVAL_OFFSET=11 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-dual-domain-context-report.md",
+    "eval:behavioral:cashout-balance-context": "JUNINHO_EVAL_OFFSET=12 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-cashout-balance-context-report.md",
+    "eval:behavioral:implement-loop": "JUNINHO_EVAL_OFFSET=13 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-implement-loop-report.md",
+    "eval:behavioral:check-loop": "JUNINHO_EVAL_OFFSET=14 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-check-loop-report.md",
+    "eval:behavioral:unify-loop": "JUNINHO_EVAL_OFFSET=15 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-unify-loop-report.md",
+    "eval:behavioral:checker-startup": "JUNINHO_EVAL_OFFSET=16 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-checker-startup-report.md",
+    "eval:behavioral:planner-startup": "JUNINHO_EVAL_OFFSET=17 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-planner-startup-report.md",
+    "eval:behavioral:spec-startup": "JUNINHO_EVAL_OFFSET=18 JUNINHO_EVAL_LIMIT=1 bun ./evals/lib/opencode-behavioral-runner.ts ./evals/behavioral.xml ./evals/reports/behavioral-spec-startup-report.md"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "1.4.9"
+  }
+}

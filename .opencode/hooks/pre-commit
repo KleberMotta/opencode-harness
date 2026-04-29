@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCRIPT_PATH="$ROOT_DIR/.opencode/scripts/pre-commit.sh"
+
+if [ ! -x "$SCRIPT_PATH" ]; then
+  echo "[juninho:pre-commit] Missing executable script: $SCRIPT_PATH" >&2
+  exit 1
+fi
+
+exec "$SCRIPT_PATH"

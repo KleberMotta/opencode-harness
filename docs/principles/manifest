@@ -1,0 +1,38 @@
+# Principles Manifest
+# CARL lookup table — maps keywords to architectural principle files.
+# Read by j.carl-inject.ts plugin on every UserPromptSubmit.
+#
+# Format:
+#   {KEY}_STATE=active|inactive
+#   {KEY}_RECALL=comma, separated, keywords
+#   {KEY}_FILE=docs/principles/{file}.md
+#
+# When a prompt word matches any keyword in _RECALL, the corresponding _FILE
+# is injected into the agent's context before it processes the prompt.
+# Add entries as /j.finish-setup discovers patterns, or manually as you codify decisions.
+
+AUTH_STATE=active
+AUTH_RECALL=auth, authentication, login, logout, session, token, jwt, oauth, clerk, middleware
+AUTH_FILE=docs/principles/auth-patterns.md
+
+ERROR_STATE=active
+ERROR_RECALL=error, exception, try, catch, throw, failure, handle, boundary
+ERROR_FILE=docs/principles/error-handling.md
+
+API_STATE=active
+API_RECALL=api, route, endpoint, handler, request, response, next, http, rest
+API_FILE=docs/principles/api-patterns.md
+
+DATA_STATE=active
+DATA_RECALL=database, prisma, query, schema, migration, model, repository, orm
+DATA_FILE=docs/principles/data-patterns.md
+
+TEST_STATE=active
+TEST_RECALL=test, spec, jest, mock, fixture, coverage, unit, integration, e2e
+TEST_FILE=docs/principles/test-patterns.md
+
+# ── Add project-specific entries below ──────────────────────────────────────
+# Example:
+# PAYMENT_STATE=active
+# PAYMENT_RECALL=payment, stripe, checkout, invoice, subscription, billing
+# PAYMENT_FILE=docs/principles/payment-patterns.md

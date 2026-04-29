@@ -1,0 +1,35 @@
+{
+  "strong": "github-copilot/gpt-5.5",
+  "medium": "github-copilot/gpt-5.5",
+  "weak": "github-copilot/claude-haiku-4.5",
+  "projectType": "node-generic",
+  "workflow": {
+    "automation": {
+      "nonInteractive": false,
+      "autoApproveArtifacts": false
+    },
+    "implement": {
+      "preCommitScope": "related",
+      "postImplementFullCheck": true,
+      "reenterImplementOnFullCheckFailure": true,
+      "watchdogSessionStale": false,
+      "refreshExecutionHeartbeat": false
+    },
+    "unify": {
+      "enabled": true,
+      "updatePersistentContext": true,
+      "updateDomainDocs": false,
+      "updateDomainIndex": false,
+      "cleanupIntegratedTaskBranches": true,
+      "commitFeatureArtifacts": false,
+      "createPullRequest": false,
+      "createDeliveryPrBody": false
+    },
+    "documentation": {
+      "preferAgentsMdForLocalRules": true,
+      "preferDomainDocsForBusinessBehavior": true,
+      "preferPrincipleDocsForCrossCuttingTech": true,
+      "syncMarkers": true
+    }
+  }
+}

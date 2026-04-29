@@ -1,0 +1,62 @@
+import { mkdirSync } from "fs"
+import path from "path"
+import { resolveProjectPaths } from "./j.workspace-paths"
+
+type FeaturePathHints = {
+  targetRepoRoot?: string
+}
+
+function resolveFeatureSpecsRoot(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  const projectPaths = resolveProjectPaths(directory, {
+    targetRepoRoot: hints?.targetRepoRoot,
+    planPath: `docs/specs/${featureSlug}/plan.md`,
+  })
+  const specsRoot = projectPaths?.specsRoot ?? path.join(directory, "docs", "specs")
+  return path.join(specsRoot, featureSlug)
+}
+
+export function featureStateDir(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(resolveFeatureSpecsRoot(directory, featureSlug, hints), "state")
+}
+
+export function featureStateTaskDir(directory: string, featureSlug: string, taskID: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "tasks", "task-" + taskID)
+}
+
+export function featureStateSessionsDir(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "sessions")
+}
+
+export function ensureFeatureStateStructure(directory: string, featureSlug: string, hints?: FeaturePathHints): void {
+  mkdirSync(featureStateDir(directory, featureSlug, hints), { recursive: true })
+  mkdirSync(path.join(featureStateDir(directory, featureSlug, hints), "tasks"), { recursive: true })
+  mkdirSync(featureStateSessionsDir(directory, featureSlug, hints), { recursive: true })
+}
+
+export function featureStateTaskPaths(directory: string, featureSlug: string, taskID: string, hints?: FeaturePathHints) {
+  const taskDir = featureStateTaskDir(directory, featureSlug, taskID, hints)
+  return {
+    taskDir,
+    statePath: path.join(taskDir, "execution-state.md"),
+    retryStatePath: path.join(taskDir, "retry-state.json"),
+    runtimePath: path.join(taskDir, "runtime.json"),
+    validatorPath: path.join(taskDir, "validator-work.md"),
+    contractPath: path.join(taskDir, "task-contract.json"),
+  }
+}
+
+export function featureStateSessionRuntimePath(directory: string, featureSlug: string, sessionID: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateSessionsDir(directory, featureSlug, hints), sessionID + "-runtime.json")
+}
+
+export function featureStateImplementerLogPath(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "implementer-work.md")
+}
+
+export function featureStateManifestPath(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "integration-state.json")
+}
+
+export function featureStateReadmePath(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "README.md")
+}

@@ -1,0 +1,14 @@
+# Ignore everything by default
+/*
+
+# Then unignore the allowed entries
+!/.gitignore
+!/AGENTS.md
+!/opencode.json
+!/.opencode
+!/docs
+!/tmp
+!README.md
+
+# Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
+/tmp/*

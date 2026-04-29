@@ -1,0 +1,142 @@
+<evaluation>
+  <qa_pair>
+    <question>Use the read tool on `src/feature/SampleController.kt`. If the harness surfaces any matching file-type guidance or skill hint for this controller file, load that guidance before answering. Then answer exactly `markers: SRC-SANDBOX-MARKER, CONTROLLER-SKILL-MARKER` only when both the nested AGENTS marker and the controller skill marker are available to you.</question>
+    <preferred_tool>read</preferred_tool>
+    <max_tool_calls>4</max_tool_calls>
+    <max_duration_ms>20000</max_duration_ms>
+    <answer>markers: SRC-SANDBOX-MARKER, CONTROLLER-SKILL-MARKER</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with a subagent. Ask that subagent to execute task 1 from the active plan for `src/feature/SampleController.kt` in the payment settlement workflow and report exactly `subagent-markers: PRINCIPLE-SUBAGENT-MARKER, DOMAIN-SUBAGENT-MARKER` only if both docs from `docs/principles` and `docs/domain` are visible to it through the harness context flow. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>30000</max_duration_ms>
+    <answer>subagent-markers: PRINCIPLE-SUBAGENT-MARKER, DOMAIN-SUBAGENT-MARKER</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Read `src/feature/SampleController.kt` and answer exactly `markers: PLAN-SANDBOX-MARKER, MEMORY-SANDBOX-MARKER` if the injected context includes the active plan marker and the persistent memory marker.</question>
+    <preferred_tool>read</preferred_tool>
+    <max_tool_calls>2</max_tool_calls>
+    <max_duration_ms>20000</max_duration_ms>
+    <answer>markers: PLAN-SANDBOX-MARKER, MEMORY-SANDBOX-MARKER</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the `find_pattern` tool with `patternType=service` and answer only `tool=find_pattern` if it succeeds without tool error.</question>
+    <preferred_tool>find-pattern_find_pattern</preferred_tool>
+    <max_tool_calls>2</max_tool_calls>
+    <max_duration_ms>20000</max_duration_ms>
+    <answer>tool=find_pattern</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the `next_version` tool with `type=migration` and answer only `tool=next_version:0002` if it returns the expected next version.</question>
+    <preferred_tool>next-version_next_version</preferred_tool>
+    <max_tool_calls>2</max_tool_calls>
+    <max_duration_ms>20000</max_duration_ms>
+    <answer>tool=next_version:0002</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the `lsp_document_symbols` tool on `src/main/kotlin/Foo.kt` and answer only `tool=lsp_document_symbols:Foo,bar` if it returns those first two symbols.</question>
+    <preferred_tool>lsp_lsp_document_symbols</preferred_tool>
+    <max_tool_calls>2</max_tool_calls>
+    <max_duration_ms>20000</max_duration_ms>
+    <answer>tool=lsp_document_symbols:Foo,bar</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Make the smallest change needed to create `src/main/kotlin/br/com/olx/trp/financial/FooService.kt` with `class FooService`, then commit it with message `test: hook success`. Stop only after the commit succeeds and answer exactly `commit=success`.</question>
+    <preferred_tool>bash</preferred_tool>
+    <max_tool_calls>12</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>commit=success</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Create `src/main/kotlin/br/com/olx/trp/financial/BadService.kt` with a temporary `// TODO remove before commit` comment above `class BadService`. The commit hook should fail lint on TODO comments. Fix the problem and stop only after a successful commit with message `test: hook recovery`, then answer exactly `commit=recovered`.</question>
+    <preferred_tool>bash</preferred_tool>
+    <max_tool_calls>18</max_tool_calls>
+    <max_duration_ms>120000</max_duration_ms>
+    <answer>commit=recovered</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>First use the read tool on `src/main/kotlin/br/com/olx/trp/financial/web/controller/sample/SampleController.kt` so any controller guidance can trigger. Then create that file using existing repository conventions. When finished, answer exactly `controller-guidance=used` only if you reused `REQUEST_ID_HEADER`, delegated to `SampleService`, and kept business logic out of the controller.</question>
+    <preferred_tool>skill</preferred_tool>
+    <max_tool_calls>12</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>controller-guidance=used</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with a subagent and ask it to execute task 1 from the active plan for `src/feature/SampleController.kt`. Tell it to answer exactly `startup-context=ready` only if it already has enough injected task guidance to know the relevant principle, domain, and test direction before opening README, RUNBOOK, or searching docs broadly. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>45000</max_duration_ms>
+    <answer>startup-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with a subagent and ask it to execute task 1 from the active plan for an order settlement workflow change. Tell it to inspect its startup context only and reply exactly `mixed-domain-context=ready` if and only if the startup context already includes both the `PRINCIPLE-SUBAGENT-MARKER` principle marker and the `Marker: DOMAIN-SANDBOX-MARKER` order-domain marker, while not including `MESSAGING-DISTRACTOR-MARKER`. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>45000</max_duration_ms>
+    <answer>mixed-domain-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with a subagent and ask it to execute task 1 from the active plan for a cashout batch-processing change. It should answer exactly `dual-domain-context=ready` only if the startup context gives it both the cashout workflow guidance and the batch-processing guidance it needs, without also injecting bank-account guidance that is only adjacent context. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>45000</max_duration_ms>
+    <answer>dual-domain-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with a subagent and ask it to execute task 1 from the active plan for a cashout approval change. Tell it to inspect its startup context only and reply exactly `cashout-balance-context=ready` if and only if the startup context already includes both `CASHOUT-BALANCE-CASHOUT-MARKER` and `CASHOUT-BALANCE-BALANCE-MARKER`, while not including `CASHOUT-BALANCE-BATCH-DISTRACTOR`. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>45000</max_duration_ms>
+    <answer>cashout-balance-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run `/j.implement task 1` for the active plan and answer exactly `implement-loop=ready` only if the harness completes that single task through the intended path: creates `src/main/kotlin/br/com/olx/trp/financial/FooService.kt`, commits it on `feature/feature-x`, writes validator output, and records task bookkeeping in `docs/specs/feature-x/state/integration-state.json`. Then answer only with that result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>implement-loop=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run `/j.check` for the active plan state and answer exactly `check-loop=ready` only if the harness runs the repo-wide check script, delegates a review to `@j.reviewer`, and writes the resulting review report to `docs/specs/feature-x/state/check-review.md`. Then answer only with that result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>check-loop=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run `/j.unify` for the active feature and answer exactly `unify-loop=ready` only if the harness reconciles the delivered task state and records configured closeout actions without creating a PR. It should at least update cleanup bookkeeping in `docs/specs/feature-x/state/integration-state.json` and return a `# Unify Report`. Then answer only with that result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>unify-loop=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with subagent `j.checker`. Tell it to inspect its startup context only, before reading files, and reply exactly `checker-startup-context=ready` if and only if that startup context already includes `CHECKER-PRINCIPLE-MARKER`, `CHECKER-ORDERS-MARKER`, and `CHECKER-BALANCE-MARKER`, while not including `CHECKER-CASHOUT-DISTRACTOR`. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>60000</max_duration_ms>
+    <answer>checker-startup-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with subagent `j.planner`. Tell it to inspect its startup context only, before reading files or asking questions, and reply exactly `planner-startup-context=ready` if and only if that startup context already includes `PLANNER-PRINCIPLE-MARKER`, `PLANNER-ORDERS-MARKER`, and `PLANNER-BALANCE-MARKER`, while not including `PLANNER-CASHOUT-DISTRACTOR`. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>60000</max_duration_ms>
+    <answer>planner-startup-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with subagent `j.spec-writer`. Tell it to inspect its startup context only, before reading files or asking questions, and reply exactly `spec-startup-context=ready` if and only if that startup context already includes `SPEC-CASHOUT-MARKER` and `SPEC-BALANCE-MARKER`, while not including `SPEC-WEB-DISTRACTOR`. Then answer only with the subagent result.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>60000</max_duration_ms>
+    <answer>spec-startup-context=ready</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>First use the read tool on `src/main/kotlin/br/com/olx/trp/financial/domain/order/mapper/SampleAggregateMapper.kt` so any mapper guidance can trigger. Then create that file using existing repository conventions. When finished, answer exactly `mapper-guidance=used` only if you chose a manual Function or BiFunction mapper, avoided extension mapping functions, and kept business logic out of the mapper.</question>
+    <preferred_tool>skill</preferred_tool>
+    <max_tool_calls>12</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>mapper-guidance=used</answer>
+  </qa_pair>
+</evaluation>
