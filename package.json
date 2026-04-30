@@ -52,8 +52,5 @@
     "eval:behavioral:checker-startup": "JUNINHO_EVAL_OFFSET=16 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-checker-startup-report.md",
     "eval:behavioral:planner-startup": "JUNINHO_EVAL_OFFSET=17 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-planner-startup-report.md",
     "eval:behavioral:spec-startup": "JUNINHO_EVAL_OFFSET=18 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-spec-startup-report.md"
-  },
-  "dependencies": {
-    "@opencode-ai/plugin": "1.4.9"
   }
 }
