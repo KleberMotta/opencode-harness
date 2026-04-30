@@ -26,6 +26,7 @@ export type JuninhoConfig = {
       reenterImplementOnFullCheckFailure?: boolean
       watchdogSessionStale?: boolean
       refreshExecutionHeartbeat?: boolean
+      singleTaskMode?: boolean
     }
     unify?: {
       enabled?: boolean
@@ -69,6 +70,7 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       reenterImplementOnFullCheckFailure: true,
       watchdogSessionStale: true,
       refreshExecutionHeartbeat: false,
+      singleTaskMode: false,
     },
     unify: {
       enabled: true,

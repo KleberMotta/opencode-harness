@@ -214,6 +214,47 @@ Regras críticas:
 - Cada child session começa com **contexto limpo** — protege a janela de contexto do orchestrator.
 - Estado fica isolado **por write target** quando o plano é multi-projeto.
 
+### 4.3.1 Single Task Mode (`singleTaskMode: true`)
+
+Quando `workflow.implement.singleTaskMode` está ativado, `/j.implement` muda de comportamento: em vez de executar o plano inteiro de uma vez, ele executa **uma task por invocação** e retorna ao developer com um relatório de progresso.
+
+```
+Developer roda /j.implement
+        │
+        ▼
+┌──────────────────────────────────┐
+│ 1. Identifica próxima task       │
+│    pendente (wave order,         │
+│    respeitando depends)          │
+│                                  │
+│ 2. Executa loop completo:        │
+│    READ → ACT → COMMIT →        │
+│    VALIDATE                      │
+│                                  │
+│ 3. PARA e reporta:              │
+│    - Task id + resumo            │
+│    - Status (COMPLETE/FAILED)    │
+│    - Commit SHA                  │
+│    - Arquivos modificados        │
+│    - Próxima task pendente       │
+│    - Progresso: {N}/{total}      │
+└──────────────────────────────────┘
+        │
+        ▼
+Developer revisa ──► pede correções? ──► agente corrige
+        │                                    │
+        ▼                                    ▼
+Developer roda /j.implement          Auto-Learning loop
+(próxima task)                       (ver seção 4.8)
+```
+
+**Por que usar**: permite revisão humana granular entre tasks. Ideal para features complexas onde o developer quer validar padrões/abordagem antes que os erros se propaguem para tasks seguintes.
+
+**Ativação**:
+```json
+{ "workflow": { "implement": { "singleTaskMode": true } } }
+```
+
 ### 4.4 `/j.implement-task <repo>:<slug>/task<id>` — Execução focada
 
 Versão cirúrgica do `/j.implement`. Executa **exatamente uma task** em **um único write target**, sai após `COMPLETE`/`FAILED`/`BLOCKED`. Não avança para tasks irmãs nem para o passe `functional-validation-plan.md`.
@@ -290,6 +331,59 @@ Delega para `@j.unify`. Lê os toggles de `juninho-config.json` (`workflow.unify
 
 Pré-requisitos: `gh auth login` ok, todas as tasks `COMPLETE`, validator `APPROVED` em todas, `/j.check` passou.
 
+### 4.8 Auto-Learning — Aprendizado contínuo do harness
+
+O harness possui uma **diretriz canônica de auto-aprendizado** (definida em `AGENTS.md`). Sempre que o developer instrui correções a uma implementação feita pelo agente, um fluxo automático é disparado:
+
+```
+Developer pede correção
+(ex.: "o nome do método deveria ser X",
+ "esse padrão está errado, use Y")
+        │
+        ▼
+┌──────────────────────────────────┐
+│ 1. CORRIGIR: aplica a correção  │
+│    solicitada                     │
+│                                  │
+│ 2. AUTO-AVALIAR: o que causou    │
+│    o erro?                        │
+│    - Skill insuficiente?         │
+│    - AGENTS.md faltando regra?   │
+│    - Domain doc incompleto?      │
+│    - Principle doc ausente?      │
+│    - find_pattern sem exemplo?   │
+│                                  │
+│ 3. PROPOR: apresenta ao dev     │
+│    - Onde: arquivo exato         │
+│    - O quê: regra/exemplo        │
+│    - Por quê: previne recorrência│
+│                                  │
+│ 4. PERGUNTAR:                    │
+│    "Deseja que eu atualize X     │
+│     com essa regra?"             │
+│                                  │
+│ 5. AGIR ou PULAR:               │
+│    Dev aprova → aplica update    │
+│    Dev rejeita → segue em frente │
+└──────────────────────────────────┘
+```
+
+**Regras do auto-learning:**
+- Nunca atualiza harness/skills/docs sem aprovação explícita do developer
+- Propostas são atômicas — uma preocupação por proposta
+- Propostas devem ser concretas (arquivo exato + conteúdo exato), não sugestões vagas
+- Artefatos da feature ativa (`plan.md`, `spec.md`, `CONTEXT.md`) são imutáveis durante implementação
+- Aplica-se a **todos os agentes** que recebem feedback de correção, não só ao implementer
+
+**Interação com singleTaskMode**: quando combinados, o fluxo natural é:
+1. `/j.implement` → executa 1 task → para
+2. Developer revisa → pede correções se necessário
+3. Agente corrige + propõe auto-learning update
+4. Developer aprova/rejeita updates ao harness
+5. Developer roda `/j.implement` novamente → próxima task (que já se beneficia dos updates)
+
+Este ciclo cria um loop de melhoria contínua onde cada task revisada torna o harness mais preciso.
+
 ---
 
 ## 5. `juninho-config.json` — toggles do workflow
@@ -350,6 +444,7 @@ Próxima sessão do opencode já usa o modelo novo.
 | `refreshExecutionHeartbeat` | `false` | Reescreve periodicamente `execution-state.md` para sinalizar vida |
 | `skipLintOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `lint-structure.sh` (útil em repos sem lint configurado) |
 | `skipTestOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `test-related.sh` (útil em repos sem test runner) |
+| `singleTaskMode` | `false` | Em `true`, `/j.implement` executa **uma task por vez** e retorna ao developer para revisão antes de prosseguir (ver seção 4.3.1) |
 
 ### 5.5 `workflow.unify`
 
@@ -388,7 +483,8 @@ Próxima sessão do opencode já usa o modelo novo.
       "postImplementFullCheck": true,
       "reenterImplementOnFullCheckFailure": true,
       "watchdogSessionStale": false,
-      "refreshExecutionHeartbeat": false
+      "refreshExecutionHeartbeat": false,
+      "singleTaskMode": true
     },
     "unify": {
       "enabled": true,
@@ -410,7 +506,7 @@ Próxima sessão do opencode já usa o modelo novo.
 }
 ```
 
-A configuração local **desativou** PR automation, doc updates, e watchdog/heartbeat — provavelmente porque o workflow atual é supervisionado e os PRs são abertos manualmente.
+A configuração local **desativou** PR automation, doc updates, e watchdog/heartbeat — e **ativou** `singleTaskMode` — porque o workflow atual é supervisionado: o developer revisa cada task individualmente e os PRs são abertos manualmente.
 
 ---
 
@@ -627,6 +723,7 @@ Toda Read tagga linhas com `NNN#XX:` (hash MD5 truncado da linha). Toda Edit val
 - [ ] Considerar `autoApproveArtifacts=true` para refactors triviais (fast path para tasks pequenas)
 
 ### 12.3 Plugins / harness
+- [ ] **Avaliar possibilidade de tornar comportamentos importantes que estão via prompt em plugins com hooks para ser mais determinístico** (ex.: `singleTaskMode` stop-after-one-task, auto-learning proposal trigger — hoje são instruções em markdown no agente, sem enforcement em código)
 - [ ] Plugin para detectar e bloquear `cd <dir> && <cmd>` (substituir por `workdir`)
 - [ ] Métricas de eval: latência média de cada agente, taxa de retry, tempo entre commit e validator approval
 - [ ] Dashboard local lendo `docs/specs/*/state/integration-state.json` para visão consolidada de features em progresso
