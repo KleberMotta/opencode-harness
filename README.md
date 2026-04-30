@@ -14,7 +14,9 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 ├── AGENTS.md               # contrato global de agentes (carregado automaticamente)
 ├── README.md               # este arquivo
 ├── package.json            # CLI utilitário do harness (rodável com `bun <script>`)
-├── opencode.json           # configuração do runtime opencode
+├── opencode.template.json  # template do runtime opencode (committed)
+├── juninho-config.json     # source of truth: modelos, workflow toggles
+├── opencode.json           # GERADO (não commitado) — `npm run sync`
 ├── .opencode/              # HARNESS JUNINHO — o coração deste workspace
 │   ├── agents/             # subagentes especializados (markdown declarativo)
 │   ├── cli/                # scripts TS do CLI utilitário (config, model, plan, state)
@@ -24,7 +26,6 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 │   ├── scripts/            # shell scripts (check-all, pre-commit, activate-plan…)
 │   ├── skills/             # SKILL.md por padrão de código (ex.: writing services)
 │   ├── skill-map.json      # mapeia file pattern → skill
-│   ├── juninho-config.json # toggles de workflow do harness
 │   ├── state/              # estado de sessão (active-plan, persistent-context)
 │   ├── templates/          # templates para artefatos (spec, CONTEXT, plan…)
 │   ├── tools/              # custom tools (find_pattern, lsp_*, ast_grep_*, …)
@@ -41,7 +42,8 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 !.gitignore
 !AGENTS.md
 !README.md
-!opencode.json
+!opencode.template.json
+!juninho-config.json
 !.opencode/
 !docs/
 !tmp/
@@ -292,15 +294,35 @@ Pré-requisitos: `gh auth login` ok, todas as tasks `COMPLETE`, validator `APPRO
 
 ## 5. `juninho-config.json` — toggles do workflow
 
-Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos descendentes via `ancestorConfigCandidates`).
+Arquivo: `~/repos/juninho-config.json` (também procurado em projetos descendentes via `ancestorConfigCandidates`).
 
 ### 5.1 Modelos
 
-| Chave | Significado | Valor atual |
-|---|---|---|
-| `strong` | Modelo "forte" para planner/spec-writer/checker | `github-copilot/gpt-5.4` |
-| `medium` | Padrão dos demais agentes | `github-copilot/gpt-5.4` |
-| `weak` | Para tarefas baratas (parsing, classificação leve) | `github-copilot/claude-haiku-4.5` |
+Os modelos dos agentes são definidos em `juninho-config.json` (source of truth) sob `models.strong`, `models.medium`, `models.weak`. O `opencode.json` é **gerado automaticamente** a partir do template `opencode.template.json` + config.
+
+**Setup inicial (uma vez após clone):**
+
+```bash
+bun install   # gera opencode.json via prepare hook
+```
+
+**Trocar um modelo:**
+
+```bash
+npm run model:set -- strong github-copilot/claude-opus-4.7
+npm run model:set -- medium github-copilot/gpt-5.4
+npm run model:set -- weak github-copilot/claude-haiku-4.5
+
+# Regenerar manualmente (se editou juninho-config.json na mão):
+npm run sync
+
+# Ver tiers atuais:
+npm run model:list
+```
+
+Próxima sessão do opencode já usa o modelo novo.
+
+> **Zero setup extra** — `bun install` é tudo. Sem env vars, sem direnv, sem wrappers.
 
 ### 5.2 Project metadata
 
@@ -498,7 +520,7 @@ graphify opencode install    # instala skill + plugin globais para o opencode
 
 ### Controle via config
 
-Em `.opencode/juninho-config.json`:
+Em `juninho-config.json`:
 ```json
 {
   "workflow": {
@@ -679,15 +701,16 @@ Os comandos `/j.*` **delegam para subagentes** (`@j.*`) — o orchestrator nunca
 
 ## 16. CLI utilitário do harness (`package.json`)
 
-Algumas operações repetitivas no `juninho-config.json` e no `state/` (trocar modelo dos agentes, ativar plano, inspecionar/limpar state) **não exigem uma sessão do opencode**. Pra essas, existe um CLI utilitário em TypeScript rodando direto no [Bun](https://bun.sh) — sem dependências, sem `npm install`, sem `node_modules`.
+Algumas operações repetitivas no `juninho-config.json` e no `state/` (trocar modelo dos agentes, ativar plano, inspecionar/limpar state) **não exigem uma sessão do opencode**. Pra essas, existe um CLI utilitário em TypeScript rodando direto no [Bun](https://bun.sh) — zero-deps, sem `node_modules`.
 
 ### 16.1 Pré-requisito
 
 ```bash
 bun --version   # já vem instalado neste workspace
+bun install     # gera opencode.json (roda prepare hook — necessário após clone)
 ```
 
-> **Por que Bun?** Os plugins/lib/tools do harness já são TypeScript executados pelo opencode em runtime Bun. Reaproveitar o runtime mantém o `package.json` zero-deps. Como Bun aceita scripts customizados sem `run`, a sintaxe fica `bun model:set-strong …` em vez de `npm run model:set-strong …`.
+> **Por que Bun?** Os plugins/lib/tools do harness já são TypeScript executados pelo opencode em runtime Bun. Reaproveitar o runtime mantém o `package.json` zero-deps.
 
 ### 16.2 Comandos disponíveis
 
@@ -695,45 +718,34 @@ Todos rodam a partir de `~/repos/`:
 
 | Script | O que faz | Exemplo |
 |--------|-----------|---------|
-| `bun config:show` | Imprime o `juninho-config.json` formatado | `bun config:show` |
-| `bun config:validate` | Valida chaves desconhecidas + tipos básicos | `bun config:validate` |
-| `bun model:list` | Lista modelos `strong/medium/weak` ativos | `bun model:list` |
-| `bun model:set-strong <id>` | Troca o modelo `strong` (usado por planner, implementer, validator…) | `bun model:set-strong github-copilot/claude-opus-4.7` |
-| `bun model:set-medium <id>` | Troca o modelo `medium` | `bun model:set-medium github-copilot/gpt-5.4` |
-| `bun model:set-weak <id>` | Troca o modelo `weak` (explore, librarian) | `bun model:set-weak github-copilot/claude-haiku-4.5` |
-| `bun toggle <key.path> <value>` | Edita qualquer toggle em `workflow.*` (prefixo `workflow.` é inferido se omitido) | `bun toggle unify.createPullRequest true` |
-| `bun plan:active` | Mostra o plano ativo (writeTargets + referenceProjects) | `bun plan:active` |
-| `bun plan:activate <project> <slug>` | Ativa um plano existente em um repo (single write target) | `bun plan:activate olxbr/trp-seller-api seller-creation-service` |
-| `bun plan:clear` | Remove o `state/active-plan.json` | `bun plan:clear` |
-| `bun state:show` | Imprime `active-plan.json` + `execution-state.md` | `bun state:show` |
-| `bun state:clear-task <slug> <task-id>` | Remove o diretório de state de uma task em todos os write targets | `bun state:clear-task seller-creation-service task-5` |
-| `bun skills:list` | Lista todas as skills + descrição | `bun skills:list` |
-| `bun agents:list` | Lista todos os subagentes + descrição | `bun agents:list` |
+| `npm run sync` | Gera `opencode.json` a partir do template + config | `npm run sync` |
+| `npm run model:list` | Mostra tiers atuais (strong/medium/weak) | `npm run model:list` |
+| `npm run model:set -- <tier> <model>` | Atualiza tier no config e regenera opencode.json | `npm run model:set -- strong github-copilot/claude-opus-4.7` |
+| `npm run config:show` | Imprime o `juninho-config.json` formatado | `npm run config:show` |
+| `npm run config:validate` | Valida chaves desconhecidas + tipos básicos | `npm run config:validate` |
+| `npm run toggle -- <key.path> <value>` | Edita qualquer toggle em `workflow.*` | `npm run toggle -- unify.createPullRequest true` |
+| `npm run plan:active` | Mostra o plano ativo (writeTargets + referenceProjects) | `npm run plan:active` |
+| `npm run plan:activate -- <project> <slug>` | Ativa um plano existente em um repo | `npm run plan:activate -- olxbr/trp-seller-api seller-creation-service` |
+| `npm run plan:clear` | Remove o `state/active-plan.json` | `npm run plan:clear` |
+| `npm run state:show` | Imprime `active-plan.json` + `execution-state.md` | `npm run state:show` |
+| `npm run state:clear-task -- <slug> <task-id>` | Remove o diretório de state de uma task | `npm run state:clear-task -- seller-creation-service task-5` |
+| `npm run skills:list` | Lista todas as skills + descrição | `npm run skills:list` |
+| `npm run agents:list` | Lista todos os subagentes + descrição | `npm run agents:list` |
 
-### 16.3 Caso de uso típico — trocar modelo strong sem abrir sessão
+### 16.3 Caso de uso típico — trocar modelo strong
 
 ```bash
-cd ~/repos
-bun model:list
-# strong:  github-copilot/gpt-5.4
-# medium:  github-copilot/gpt-5.4
-# weak:    github-copilot/claude-haiku-4.5
-
-bun model:set-strong github-copilot/claude-opus-4.7
-# strong: github-copilot/gpt-5.4 → github-copilot/claude-opus-4.7
-
-bun config:validate
-# config válida
-#   strong:  github-copilot/claude-opus-4.7
-#   ...
+npm run model:set -- strong github-copilot/claude-opus-4.7
+# ✓ juninho-config.json: models.strong = github-copilot/claude-opus-4.7
+# ✓ opencode.json gerado (strong=github-copilot/claude-opus-4.7, medium=..., weak=...)
 ```
 
-Próxima sessão do opencode já pega o modelo novo via `loadJuninhoConfig()` (lib/j.juninho-config.ts).
+Próxima sessão do opencode já usa o modelo novo.
 
 ### 16.4 Caso de uso — desligar criação de PR temporariamente
 
 ```bash
-bun toggle unify.createPullRequest false
+npm run toggle -- unify.createPullRequest false
 # workflow.unify.createPullRequest: true → false
 ```
 
@@ -783,7 +795,7 @@ SCOPE=$(config_get_workflow_string     "implement.preCommitScope"      "related"
 
 - Funções `config_get_workflow_string` e `config_get_workflow_bool` aceitam dotted-path sob `workflow.*` + valor default obrigatório.
 - Parser tenta `node` → `bun` → `python3` na ordem; falha silenciosa retorna o default (não quebra o script).
-- Procura config em `TARGET_REPO_ROOT/.opencode/juninho-config.json` primeiro, caindo para `WORKSPACE_ROOT/.opencode/juninho-config.json`.
+- Procura config em `TARGET_REPO_ROOT/juninho-config.json` primeiro, caindo para `WORKSPACE_ROOT/juninho-config.json`.
 
 ### 17.3 `_detect-stack.sh` — detecção de stack via FS markers
 

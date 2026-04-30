@@ -19,7 +19,7 @@
   },
   "agent": {
     "j.planner": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "write": "allow",
         "bash": "allow",
@@ -34,7 +34,7 @@
       }
     },
     "j.plan-reviewer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "task": "deny",
         "bash": "deny",
@@ -44,7 +44,7 @@
       }
     },
     "j.spec-writer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "bash": "deny",
         "write": "allow",
@@ -57,7 +57,7 @@
       }
     },
     "j.implementer": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "__MEDIUM_MODEL__",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -71,7 +71,7 @@
       }
     },
     "j.validator": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -81,7 +81,7 @@
       }
     },
     "j.reviewer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "bash": "deny",
         "write": "deny",
@@ -91,7 +91,7 @@
       }
     },
     "j.checker": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -104,7 +104,7 @@
       }
     },
     "j.unify": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -114,7 +114,7 @@
       }
     },
     "j.explore": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "__WEAK_MODEL__",
       "permission": {
         "bash": "deny",
         "write": "deny",
@@ -124,7 +124,7 @@
       }
     },
     "j.librarian": {
-      "model": "github-copilot/claude-haiku-4.5",
+      "model": "__WEAK_MODEL__",
       "permission": {
         "bash": "deny",
         "write": "deny",
@@ -134,7 +134,7 @@
       }
     },
     "j.plan": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "task": {
           "*": "deny",
@@ -147,7 +147,7 @@
       }
     },
     "j.spec": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "__STRONG_MODEL__",
       "permission": {
         "task": {
           "*": "deny",

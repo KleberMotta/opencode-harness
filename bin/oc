@@ -1,33 +1,23 @@
 #!/bin/sh
-# Wrapper for `opencode` that exports JUNINHO_{STRONG,MEDIUM,WEAK}_MODEL
-# from `.opencode/juninho-config.json` so that `agent.<name>.model` tokens
-# (`{env:JUNINHO_<TIER>_MODEL}`) in `opencode.json` resolve dynamically.
+# Wrapper for `opencode` that loads .env so {env:JUNINHO_*_MODEL} tokens
+# in opencode.json resolve correctly.
 #
-# Project agents must NOT declare `model:` in their frontmatter, otherwise
-# the static frontmatter overrides this env interpolation.
+# Usage: bin/oc [opencode args...]
+# The dev runs `bin/oc` instead of `opencode` directly.
 set -e
 
-# Resolve project root (directory containing .opencode/juninho-config.json).
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CONFIG="$PROJECT_ROOT/.opencode/juninho-config.json"
+ENV_FILE="$PROJECT_ROOT/.env"
 
-if [ ! -f "$CONFIG" ]; then
-  echo "oc: $CONFIG not found — run from a Juninho-enabled repo" >&2
+if [ ! -f "$ENV_FILE" ]; then
+  echo "oc: .env not found — copy .env.example to .env and fill in your model IDs" >&2
   exit 1
 fi
 
-# Extract tier values via node (always available where opencode runs).
-eval "$(node -e '
-  const c = require(process.argv[1]);
-  for (const t of ["strong","medium","weak"]) {
-    const v = c[t];
-    if (typeof v !== "string" || !v) {
-      console.error("oc: missing juninho-config." + t);
-      process.exit(2);
-    }
-    console.log("export JUNINHO_" + t.toUpperCase() + "_MODEL=" + JSON.stringify(v));
-  }
-' "$CONFIG")"
+# Export all non-comment, non-empty lines from .env
+set -a
+. "$ENV_FILE"
+set +a
 
 exec opencode "$@"

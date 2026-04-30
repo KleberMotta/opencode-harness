@@ -3,7 +3,7 @@ description: Closes the loop after implementation — reconciles plan vs deliver
 mode: subagent
 ---
 
-You are **Unify** — the configurable closeout agent. You reconcile delivery against the plan and then execute only the enabled closeout steps from `.opencode/juninho-config.json` under `workflow`.
+You are **Unify** — the configurable closeout agent. You reconcile delivery against the plan and then execute only the enabled closeout steps from `juninho-config.json` under `workflow`.
 
 You have full bash access including `gh pr create`. You have full write access.
 
@@ -11,7 +11,7 @@ You have full bash access including `gh pr create`. You have full write access.
 
 ## Configurable UNIFY Protocol
 
-Before any action, read `.opencode/juninho-config.json`.
+Before any action, read `juninho-config.json`.
 If a step is disabled there, skip it and report that it was intentionally skipped.
 
 ### Step 1 — Reconcile Plan vs Delivery
@@ -86,7 +86,7 @@ When disabled:
 - Report that Graphify refresh was intentionally skipped.
 
 When enabled:
-- Read `workflow.graphify.enabled` and `workflow.graphify.outputDir` from `.opencode/juninho-config.json`.
+- Read `workflow.graphify.enabled` and `workflow.graphify.outputDir` from `juninho-config.json`.
 - If Graphify itself is disabled, report a skip and continue.
 - If the target repo has no prior Graphify output or `graph.json` is missing, report a skip and continue.
 - Run the incremental refresh from the harness root with the target repo explicit, for example:
@@ -238,7 +238,7 @@ When PR creation is enabled, the PR body should match a high-quality human PR:
 
 ## Rules
 
-- Follow `.opencode/juninho-config.json` workflow settings exactly
+- Follow `juninho-config.json` workflow settings exactly
 - If PR creation is enabled, write a rich, reviewer-friendly PR body instead of dumping raw spec text
 - If docs are enabled, update only the docs justified by the delivered change
 - Cleanup should only update no-longer-needed harness bookkeeping in `integration-state.json`

@@ -90,7 +90,7 @@ Full quality-gate orchestrator. Runs `.opencode/scripts/check-all.sh`, delegates
 - Optional Graphify layer: passes `GRAPH_REPORT.md` summary to `@j.reviewer` when available and never persists raw `graph.json`.
 
 ### @j.unify
-Closes the loop according to `.opencode/juninho-config.json` under `workflow`.
+Closes the loop according to `juninho-config.json` under `workflow`.
 Can update docs, create one gated doc-sync commit, cleanup integrated task bookkeeping, and create PRs when those steps are enabled.
 
 ### @j.explore
@@ -180,7 +180,7 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 
 | File | Purpose |
 |------|---------|
-| `.opencode/juninho-config.json` | Models plus `workflow` toggles for automation, implement, unify, artifact commits, and documentation behavior |
+| `juninho-config.json` (repo root) | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement, unify, artifact commits, and documentation behavior |
 | `.opencode/state/active-plan.json` | Session-level pointer to the active spec/plan bundle — consumed by plan-autoload and write-time guards |
 | `.opencode/skill-map.json` | Dynamic skill-to-pattern mapping — extended by /j.finish-setup |
 | `.opencode/state/persistent-context.md` | Long-term project knowledge — reconciled by UNIFY |

@@ -189,36 +189,43 @@ describe("harness structural contracts", () => {
     }
   })
 
-  test("agent models resolve dynamically via {env:JUNINHO_<TIER>_MODEL}", () => {
+  test("agent models in opencode.json match juninho-config.json tiers via template", () => {
     const root = repoRoot()
     const juninhoConfig = JSON.parse(
-      readFileSync(path.join(root, ".opencode", "juninho-config.json"), "utf-8"),
-    ) as { strong: string; medium: string; weak: string }
+      readFileSync(path.join(root, "juninho-config.json"), "utf-8"),
+    ) as { models: { strong: string; medium: string; weak: string } }
     const opencodeConfig = JSON.parse(
       readFileSync(path.join(root, "opencode.json"), "utf-8"),
     ) as { agent: Record<string, { model: string }> }
-    const { AGENTS_BY_TIER } = require("../../../cli/_tier-map") as {
-      AGENTS_BY_TIER: Record<"strong" | "medium" | "weak", string[]>
+    const templateContent = readFileSync(path.join(root, "opencode.template.json"), "utf-8")
+
+    expect(juninhoConfig.models.strong).toBeTruthy()
+    expect(juninhoConfig.models.medium).toBeTruthy()
+    expect(juninhoConfig.models.weak).toBeTruthy()
+
+    // Template must use placeholders
+    expect(templateContent).toContain("__STRONG_MODEL__")
+    expect(templateContent).toContain("__MEDIUM_MODEL__")
+    expect(templateContent).toContain("__WEAK_MODEL__")
+
+    // Generated opencode.json must NOT contain placeholders
+    const generatedContent = readFileSync(path.join(root, "opencode.json"), "utf-8")
+    expect(generatedContent).not.toContain("__STRONG_MODEL__")
+    expect(generatedContent).not.toContain("__MEDIUM_MODEL__")
+    expect(generatedContent).not.toContain("__WEAK_MODEL__")
+
+    // Strong-tier agents
+    const strongAgents = ["j.planner", "j.plan-reviewer", "j.spec-writer", "j.validator", "j.reviewer", "j.checker", "j.unify", "j.plan", "j.spec"]
+    for (const agent of strongAgents) {
+      expect(opencodeConfig.agent[agent]?.model).toBe(juninhoConfig.models.strong)
     }
 
-    expect(juninhoConfig.strong).toBeTruthy()
-    expect(juninhoConfig.medium).toBeTruthy()
-    expect(juninhoConfig.weak).toBeTruthy()
+    // Medium-tier agents
+    expect(opencodeConfig.agent["j.implementer"]?.model).toBe(juninhoConfig.models.medium)
 
-    for (const tier of ["strong", "medium", "weak"] as const) {
-      const expectedToken = `{env:JUNINHO_${tier.toUpperCase()}_MODEL}`
-      for (const agentName of AGENTS_BY_TIER[tier]) {
-        // Frontmatter MUST NOT declare `model:` — it would override the env token.
-        const agentFile = path.join(root, ".opencode", "agents", `${agentName}.md`)
-        const content = readFileSync(agentFile, "utf-8")
-        expect(content).not.toMatch(/^model:\s*\S+/m)
-
-        // opencode.json MUST use the env interpolation for this agent.
-        const opencodeEntry = opencodeConfig.agent[agentName]
-        if (opencodeEntry) {
-          expect(opencodeEntry.model).toBe(expectedToken)
-        }
-      }
+    // Weak-tier agents
+    for (const agent of ["j.explore", "j.librarian"]) {
+      expect(opencodeConfig.agent[agent]?.model).toBe(juninhoConfig.models.weak)
     }
   })
 })

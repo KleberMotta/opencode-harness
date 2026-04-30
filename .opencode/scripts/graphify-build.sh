@@ -73,13 +73,16 @@ case "$GRAPHIFY_OUTPUT_DIR" in
 esac
 
 if [ -z "${GRAPHIFY_MODEL:-}" ]; then
-  CONFIG_PATH="$WORKSPACE_ROOT/.opencode/juninho-config.json"
+  CONFIG_PATH="$WORKSPACE_ROOT/juninho-config.json"
+  if [ ! -f "$CONFIG_PATH" ]; then
+    CONFIG_PATH="$WORKSPACE_ROOT/.opencode/juninho-config.json"
+  fi
   if command -v node >/dev/null 2>&1; then
-    GRAPHIFY_MODEL="$(node -e 'const fs=require("fs"); const p=process.argv[1]; try { const c=JSON.parse(fs.readFileSync(p,"utf8")); process.stdout.write(c.weak || ""); } catch {}' "$CONFIG_PATH" 2>/dev/null || true)"
+    GRAPHIFY_MODEL="$(node -e 'const fs=require("fs"); const p=process.argv[1]; try { const c=JSON.parse(fs.readFileSync(p,"utf8")); process.stdout.write((c.models&&c.models.weak) || c.weak || ""); } catch {}' "$CONFIG_PATH" 2>/dev/null || true)"
   elif command -v bun >/dev/null 2>&1; then
-    GRAPHIFY_MODEL="$(bun -e 'const fs=require("fs"); const p=process.argv[2]; try { const c=JSON.parse(fs.readFileSync(p,"utf8")); process.stdout.write(c.weak || ""); } catch {}' "$CONFIG_PATH" 2>/dev/null || true)"
+    GRAPHIFY_MODEL="$(bun -e 'const fs=require("fs"); const p=process.argv[2]; try { const c=JSON.parse(fs.readFileSync(p,"utf8")); process.stdout.write((c.models&&c.models.weak) || c.weak || ""); } catch {}' "$CONFIG_PATH" 2>/dev/null || true)"
   elif command -v python3 >/dev/null 2>&1; then
-    GRAPHIFY_MODEL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("weak", ""), end="")' "$CONFIG_PATH" 2>/dev/null || true)"
+    GRAPHIFY_MODEL="$(python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); print(c.get("models",{}).get("weak","") or c.get("weak",""), end="")' "$CONFIG_PATH" 2>/dev/null || true)"
   fi
 fi
 export GRAPHIFY_MODEL

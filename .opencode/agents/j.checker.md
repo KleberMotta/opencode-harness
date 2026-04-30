@@ -21,7 +21,7 @@ You are NOT the code reviewer yourself. The qualitative review must come from `@
 ## Required Inputs
 
 Read in this order when they exist:
-1. `.opencode/juninho-config.json`
+1. `juninho-config.json`
 2. `.opencode/state/active-plan.json` — discover all write targets and their `targetRepoRoot` paths
 
 Then, for each write target project (`$REPO_ROOT`):

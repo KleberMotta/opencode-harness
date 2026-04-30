@@ -2,13 +2,17 @@ import { existsSync, readFileSync } from "fs"
 import path from "path"
 import { resolveProjectPaths } from "./j.workspace-paths"
 
-export type JuninhoConfig = {
+export type ModelTiers = {
   strong?: string
   medium?: string
   weak?: string
+}
+
+export type JuninhoConfig = {
   projectType?: string
   isKotlin?: boolean
   buildTool?: string
+  models?: ModelTiers
   workflow?: {
     automation?: {
       nonInteractive?: boolean

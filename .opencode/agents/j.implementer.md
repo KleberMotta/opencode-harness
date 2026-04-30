@@ -82,7 +82,7 @@ Hard rules:
     - read absolute `validatorWorkPath` if it exists
     - for each dependency `{dep}`, read its execution state and validator log if they exist
 10. If you are orchestrating the whole feature, read all existing absolute target-local `state/tasks/task-*/execution-state.md` files to understand progress and resumability per write target.
-11. Read `.opencode/juninho-config.json` and follow `workflow.implement` exactly, including `watchdogSessionStale` and `refreshExecutionHeartbeat`.
+11. Read `juninho-config.json` and follow `workflow.implement` exactly, including `watchdogSessionStale` and `refreshExecutionHeartbeat`.
 12. Ensure state directories exist:
 
 ```bash

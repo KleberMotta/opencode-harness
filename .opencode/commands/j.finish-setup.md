@@ -94,7 +94,7 @@ In this mode, `/j.finish-setup` must resolve the **target project root** before 
 
 ### Phase 7 — Bootstrap Graphify
 
-18. Read the harness `.opencode/juninho-config.json` and inspect `workflow.graphify.enabled`
+18. Read the harness `juninho-config.json` and inspect `workflow.graphify.enabled`
 19. If Graphify is disabled, record an intentional skip for this phase and do not run any build
 20. If Graphify is enabled, run `npm run graphify:build -- --repo "$PROJECT_ROOT"` from the harness root
 21. Document Graphify outputs in `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`

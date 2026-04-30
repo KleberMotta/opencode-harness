@@ -28,7 +28,7 @@ Activate high-throughput mode — work until all tasks in the plan are complete.
 14. Loop continues until all tasks across all write targets are marked complete
 15. Record each APPROVED task commit in the target's `docs/specs/{feature-slug}/state/integration-state.json`
 16. Run `/j.check` once task-level work is done; this must validate the canonical plan branch in every target repo
-17. `@j.unify` runs only if closeout is enabled in `.opencode/juninho-config.json` under `workflow.unify.enabled` and should only do closeout/cleanup/PR work
+17. `@j.unify` runs only if closeout is enabled in `juninho-config.json` under `workflow.unify.enabled` and should only do closeout/cleanup/PR work
 
 ## When to use
 
