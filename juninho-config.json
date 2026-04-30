@@ -43,7 +43,8 @@
       "preferAgentsMdForLocalRules": true,
       "preferDomainDocsForBusinessBehavior": true,
       "preferPrincipleDocsForCrossCuttingTech": true,
-      "syncMarkers": true
+      "syncMarkers": true,
+      "replicateSpecToTargetRepos": false
     }
   }
 }

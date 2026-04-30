@@ -213,11 +213,11 @@ feature_branch_name() {
 }
 
 manifest_path() {
-  printf '%s/docs/specs/%s/state/integration-state.json' "$ROOT_DIR" "$1"
+  printf '%s/docs/specs/%s/state/integration-state.json' "$WORKSPACE_ROOT" "$1"
 }
 
 ensure_manifest_dir() {
-  TARGET_REPO_ROOT="$ROOT_DIR" sh "$WORKSPACE_ROOT/.opencode/scripts/scaffold-spec-state.sh" "$1"
+  sh "$WORKSPACE_ROOT/.opencode/scripts/scaffold-spec-state.sh" "$1"
 }
 
 json_read_field() {

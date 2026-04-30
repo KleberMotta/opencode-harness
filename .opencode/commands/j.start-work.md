@@ -20,8 +20,8 @@ Initialize context for a focused work session on a specific task.
 
 1. Reads `.opencode/state/active-plan.json` to discover write targets
 2. For each write target project, loads `docs/domain/INDEX.md` for domain context
-3. Checks per-target `docs/specs/{feature-slug}/state/` for any in-progress work
-4. If a `plan.md` exists in any target: loads it and presents next steps
+3. Checks `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/` for any in-progress work
+4. If a `plan.md` exists in workspace: loads it and presents next steps
 5. If no plan: asks whether to `/j.plan` first or jump straight to `/j.implement`
 6. Sets up execution state for the current task
 

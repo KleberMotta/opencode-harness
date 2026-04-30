@@ -6,11 +6,17 @@ type FeaturePathHints = {
   targetRepoRoot?: string
 }
 
-function resolveFeatureSpecsRoot(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+/**
+ * Spec artifacts and implementation state now live in the WORKSPACE root,
+ * not in each target repo. This centralizes all feature artifacts under
+ * {workspace}/docs/specs/{slug}/ regardless of how many write targets exist.
+ */
+function resolveFeatureSpecsRoot(directory: string, featureSlug: string, _hints?: FeaturePathHints): string {
   const projectPaths = resolveProjectPaths(directory, {
-    targetRepoRoot: hints?.targetRepoRoot,
+    targetRepoRoot: _hints?.targetRepoRoot,
     planPath: `docs/specs/${featureSlug}/plan.md`,
   })
+  // specsRoot now resolves to workspace/docs/specs (not project/docs/specs)
   const specsRoot = projectPaths?.specsRoot ?? path.join(directory, "docs", "specs")
   return path.join(specsRoot, featureSlug)
 }

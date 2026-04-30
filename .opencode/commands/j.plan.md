@@ -24,8 +24,8 @@ Invoke the `@j.planner` agent to create an actionable plan from a goal.
 4. Uses project rules, domain docs, principle docs, and the existing `CONTEXT.md` before fixing the plan
 4. Classifies repositories into **write targets** (repos with code changes) and **reference projects** (read-only context)
 5. Interviews you (proportional to complexity)
-6. Enriches `CONTEXT.md` with durable planning discoveries and writes `plan.md` into each write target project's `$REPO_ROOT/docs/specs/{feature-slug}/`
-7. Writes `active-plan.json` with all `writeTargets` and their `targetRepoRoot` paths
+6. Enriches `CONTEXT.md` with durable planning discoveries and writes a single unified `plan.md` into the workspace's `$WORKSPACE_ROOT/docs/specs/{feature-slug}/`
+7. Writes `active-plan.json` with centralized spec paths and `writeTargets` listing target repos
 8. Spawns `@j.plan-reviewer` for automated quality check
 9. **Presents the plan to you for explicit approval**
 10. Marks plan as ready for `/j.implement` (only after your approval)

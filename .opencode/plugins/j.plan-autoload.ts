@@ -52,11 +52,15 @@ export default (async ({ directory }: { directory: string }) => {
       specPath: state.specPath,
       contextPath: state.contextPath,
     })
+    // Workspace-relative paths (e.g. docs/specs/foo/plan.md) resolve from workspace root (directory)
+    // Absolute paths stay absolute. Only target-repo-relative paths use projectRoot.
     const fullPath = path.isAbsolute(planPath)
       ? planPath
-      : projectPaths
-        ? resolvePathFromProjectRoot(projectPaths.projectRoot, planPath)
-        : path.join(directory, planPath)
+      : planPath.startsWith("docs/specs/")
+        ? path.join(directory, planPath)
+        : projectPaths
+          ? resolvePathFromProjectRoot(projectPaths.projectRoot, planPath)
+          : path.join(directory, planPath)
     if (!existsSync(fullPath)) return null
 
     return {
@@ -76,9 +80,12 @@ export default (async ({ directory }: { directory: string }) => {
         .map((target) => {
           const projectPaths = resolveProjectPaths(directory, { targetRepoRoot: target.targetRepoRoot, planPath: target.planPath })
           if (!projectPaths || !target.planPath) return null
+          // Workspace-relative paths (e.g. docs/specs/foo/plan.md) resolve from workspace root
           const targetPlanFullPath = path.isAbsolute(target.planPath)
             ? target.planPath
-            : resolvePathFromProjectRoot(projectPaths.projectRoot, target.planPath)
+            : target.planPath.startsWith("docs/specs/")
+              ? path.join(directory, target.planPath)
+              : resolvePathFromProjectRoot(projectPaths.projectRoot, target.planPath)
           const targetPlanContent = existsSync(targetPlanFullPath) ? readFileSync(targetPlanFullPath, "utf-8") : undefined
           return {
             projectLabel: projectPaths.projectLabel,

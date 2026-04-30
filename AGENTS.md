@@ -179,21 +179,26 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 
 ## State Files
 
-| File | Purpose |
-|------|---------|
-| `juninho-config.json` (repo root) | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement (including `singleTaskMode`), unify, artifact commits, and documentation behavior |
-| `.opencode/state/active-plan.json` | Session-level pointer to the active spec/plan bundle — consumed by plan-autoload and write-time guards |
-| `.opencode/skill-map.json` | Dynamic skill-to-pattern mapping — extended by /j.finish-setup |
-| `.opencode/state/persistent-context.md` | Long-term project knowledge — reconciled by UNIFY |
-| `.opencode/state/execution-state.md` | Global session summary — active goal, plan path, session log |
-| `docs/specs/{slug}/state/implementer-work.md` | Feature-local implementer log (append-only) |
-| `docs/specs/{slug}/state/check-review.md` | Latest repo-wide check + detailed review findings for follow-up corrections |
-| `docs/specs/{slug}/state/tasks/task-{id}/execution-state.md` | Per-task lease, heartbeat, status, validated commit |
-| `docs/specs/{slug}/state/tasks/task-{id}/validator-work.md` | Per-task validator audit trail |
-| `docs/specs/{slug}/state/tasks/task-{id}/retry-state.json` | Retry budget and retry bookkeeping |
-| `docs/specs/{slug}/state/tasks/task-{id}/runtime.json` | Runtime metadata for watchdog/orchestration |
-| `docs/specs/{slug}/state/sessions/{sessionID}-runtime.json` | Session runtime ownership metadata |
-| `docs/specs/{slug}/state/integration-state.json` | Canonical feature integration manifest |
+| File | Location | Purpose |
+|------|----------|---------|
+| `juninho-config.json` | workspace root | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement (including `singleTaskMode`), unify, artifact commits, and documentation behavior |
+| `.opencode/state/active-plan.json` | workspace | Session-level pointer to the active spec/plan bundle — consumed by plan-autoload and write-time guards |
+| `.opencode/skill-map.json` | workspace | Dynamic skill-to-pattern mapping — extended by /j.finish-setup |
+| `.opencode/state/persistent-context.md` | workspace | Long-term project knowledge — reconciled by UNIFY |
+| `.opencode/state/execution-state.md` | workspace | Global session summary — active goal, plan path, session log |
+| `docs/specs/{slug}/plan.md` | workspace | Unified plan covering all write targets |
+| `docs/specs/{slug}/spec.md` | workspace | Unified spec covering all write targets |
+| `docs/specs/{slug}/CONTEXT.md` | workspace | Durable research context and business intent |
+| `docs/specs/{slug}/state/implementer-work.md` | workspace | Feature-local implementer log (append-only) |
+| `docs/specs/{slug}/state/check-review.md` | workspace | Latest repo-wide check + detailed review findings for follow-up corrections |
+| `docs/specs/{slug}/state/tasks/task-{id}/execution-state.md` | workspace | Per-task lease, heartbeat, status, validated commit |
+| `docs/specs/{slug}/state/tasks/task-{id}/validator-work.md` | workspace | Per-task validator audit trail |
+| `docs/specs/{slug}/state/tasks/task-{id}/retry-state.json` | workspace | Retry budget and retry bookkeeping |
+| `docs/specs/{slug}/state/tasks/task-{id}/runtime.json` | workspace | Runtime metadata for watchdog/orchestration |
+| `docs/specs/{slug}/state/sessions/{sessionID}-runtime.json` | workspace | Session runtime ownership metadata |
+| `docs/specs/{slug}/state/integration-state.json` | workspace | Canonical feature integration manifest |
+| `docs/domain/{domain}/*.md` | target repos | Business domain docs (stays per-repo) |
+| `docs/principles/{topic}.md` | target repos | Technical principles (stays per-repo) |
 
 ## Auto-Learning Directive
 
@@ -234,9 +239,10 @@ Any time the developer:
 
 ## Conventions
 
-- Specs: `docs/specs/{feature-slug}/spec.md` + `CONTEXT.md` + `plan.md` + `state/**`
-- Domain docs: `docs/domain/{domain}/*.md` — indexed in `docs/domain/INDEX.md`
-- Principles: `docs/principles/{topic}.md` — registered in `docs/principles/manifest`
+- Specs: `docs/specs/{feature-slug}/spec.md` + `CONTEXT.md` + `plan.md` + `state/**` — all in **workspace root**, not in target repos
+- A single unified plan.md/spec.md/CONTEXT.md covers all write targets; no per-repo duplication unless `workflow.documentation.replicateSpecToTargetRepos` is true
+- Domain docs: `docs/domain/{domain}/*.md` — indexed in `docs/domain/INDEX.md` — stays in target repos
+- Principles: `docs/principles/{topic}.md` — registered in `docs/principles/manifest` — stays in target repos
 - Sync markers: `<!-- juninho:sync source=... hash=... -->` to track doc↔code alignment
 - Implementation history: exactly one implementation commit per task on `feature/{slug}`; optional `/j.unify` commits are limited to one doc-sync commit gated by `workflow.unify.commitDocUpdates` and one feature-state artifact commit gated by `workflow.unify.commitFeatureArtifacts`.
 - Hierarchical `AGENTS.md`: root + `src/` + `src/{module}/` — generated by `/j.finish-setup`

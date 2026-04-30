@@ -52,6 +52,7 @@ export type JuninhoConfig = {
       preferDomainDocsForBusinessBehavior?: boolean
       preferPrincipleDocsForCrossCuttingTech?: boolean
       syncMarkers?: boolean
+      replicateSpecToTargetRepos?: boolean
     }
   }
 }
@@ -96,6 +97,7 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       preferDomainDocsForBusinessBehavior: true,
       preferPrincipleDocsForCrossCuttingTech: true,
       syncMarkers: true,
+      replicateSpecToTargetRepos: false,
     },
   },
 }

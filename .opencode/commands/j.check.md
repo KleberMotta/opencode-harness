@@ -21,7 +21,7 @@ Invoke the `@j.checker` agent to run the full repository verification after `@j.
 1. If a repo path or plan/spec/context path is provided, that explicit target takes precedence over the workspace `.opencode/state/active-plan.json`.
 2. `@j.checker` reads the resolved `.opencode/state/active-plan.json` to discover all write targets
 3. `@j.checker` runs `.opencode/scripts/check-all.sh`, which iterates every target repo from the active multi-project plan
-4. For each write target (`$REPO_ROOT`), `@j.checker` reads `$REPO_ROOT/docs/specs/{feature-slug}/CONTEXT.md` and `$REPO_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists
+4. For each write target (`$REPO_ROOT`), `@j.checker` reads `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md` and `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists
 5. `@j.checker` delegates a detailed read-only multi-pass review to `@j.reviewer` covering all write targets
 
 This script is expected to run the repository-wide checks for the current stack.
@@ -43,8 +43,8 @@ The review must be performed in multiple passes, not one shallow pass:
 - Pass 2: spec/plan/domain/rule alignment and runtime blind spots
 - Pass 3: project patterns, simplicity, bloat, and maintainability
 
-If a feature slug is active, persist the report to each write target:
-- `$REPO_ROOT/docs/specs/{feature-slug}/state/check-review.md`
+If a feature slug is active, persist the report to the workspace:
+- `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-review.md`
 
 Operational rule:
 - delegate the review to `@j.reviewer`

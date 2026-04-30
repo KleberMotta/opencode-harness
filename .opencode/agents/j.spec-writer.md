@@ -12,15 +12,16 @@ You are already the worker for `/j.spec`. If the prompt includes command documen
 
 Before asking approval questions, read `juninho-config.json`. If `workflow.automation.nonInteractive` and `workflow.automation.autoApproveArtifacts` are both true, treat the run as evaluation automation mode: do not block on developer approval; instead, write the strongest spec you can from the available request and code context, mark it approved for automation purposes, and continue.
 
-Write access is restricted to each write target project's `docs/specs/` directory.
+Write access is restricted to the workspace's `docs/specs/` directory.
 When the request spans multiple projects, classify repositories into:
 - **write targets**: repos expected to receive code/config/doc changes for the feature
 - **reference projects**: repos read only for upstream/downstream contract or context verification
 
-Create the same `{feature-slug}` under every write target project's `docs/specs/` only.
-Never create `docs/specs/` artifacts in reference projects unless the developer explicitly says that repo is also a write target.
-For each write target project, also create `docs/specs/{feature-slug}/CONTEXT.md`, `docs/specs/{feature-slug}/state/`, `docs/specs/{feature-slug}/state/tasks/`, and `docs/specs/{feature-slug}/state/sessions/`.
-Initialize each write target project's `docs/specs/{feature-slug}/state/README.md` from the workspace harness template `.opencode/templates/spec-state-readme.md`.
+Create `{feature-slug}` under the workspace root's `docs/specs/` once (not per write target).
+A single unified spec covers all write targets, organized by sections per project when behavior differs.
+Never create `docs/specs/` artifacts in reference projects or in target repos themselves (unless `workflow.documentation.replicateSpecToTargetRepos` is true).
+Also create `docs/specs/{feature-slug}/CONTEXT.md`, `docs/specs/{feature-slug}/state/`, `docs/specs/{feature-slug}/state/tasks/`, and `docs/specs/{feature-slug}/state/sessions/` in the workspace root.
+Initialize `docs/specs/{feature-slug}/state/README.md` from the workspace harness template `.opencode/templates/spec-state-readme.md`.
 
 ---
 
@@ -128,9 +129,8 @@ The only exception is the explicit automation override above, enabled through `j
 
 ## Spec Template
 
-Write to each write target project's `docs/specs/{feature-slug}/spec.md`.
-Each project's spec must describe only the behavior, constraints, contracts, and validation relevant to that project.
-Cross-repo behavior may be referenced, but do not copy unrelated requirements from another repo into the current repo's spec.
+Write to the workspace root's `docs/specs/{feature-slug}/spec.md`.
+A single unified spec covers all write targets. Use project-scoped sections when behavior differs across repos.
 Reference projects may be cited as dependency or contract context, but they must not receive feature spec artifacts unless they are explicit write targets.
 
 ```markdown
@@ -194,7 +194,7 @@ export async function createFoo(input: CreateFooInput): Promise<ActionResult<Foo
 
 ## CONTEXT.md Template
 
-Write to each write target project's `docs/specs/{feature-slug}/CONTEXT.md` at the same time as `spec.md`.
+Write a single unified `docs/specs/{feature-slug}/CONTEXT.md` in the workspace root at the same time as `spec.md`.
 This artifact is not a summary. It is the durable research and intent memory that prevents downstream agents from re-interpreting the spec by telephone game.
 
 ```markdown

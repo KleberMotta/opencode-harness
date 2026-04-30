@@ -25,17 +25,17 @@ Read in this order when they exist:
 2. `.opencode/state/active-plan.json` — discover all write targets and their `targetRepoRoot` paths
 
 Then, for each write target project (`$REPO_ROOT`):
-3. `$REPO_ROOT/docs/specs/{feature-slug}/plan.md`
-4. `$REPO_ROOT/docs/specs/{feature-slug}/spec.md`
-5. `$REPO_ROOT/docs/specs/{feature-slug}/CONTEXT.md`
-6. `$REPO_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md`
-7. `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
-8. existing `$REPO_ROOT/docs/specs/{feature-slug}/state/check-review.md` when present
-9. existing `$REPO_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt` when present
+3. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/plan.md`
+4. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/spec.md`
+5. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md`
+6. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md`
+7. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
+8. existing `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-review.md` when present
+9. existing `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt` when present
 10. optional `$REPO_ROOT/docs/domain/graphify/GRAPH_REPORT.md` when present; never ingest raw `graph.json`
 
 Infer `{feature-slug}` from the active plan when not explicitly provided.
-For multi-project plans, perform the same artifact read/write contract for every write target project involved. All `docs/specs/` paths are relative to each target's `$REPO_ROOT`.
+Spec artifacts and implementation state live in the workspace root (`$WORKSPACE_ROOT/docs/specs/`), not in each target repo. Only domain/principles docs remain in target repos.
 Do not create or expect feature artifacts in `referenceProjects` unless the plan explicitly lists them as write targets too.
 
 ---
@@ -50,9 +50,9 @@ sh /Users/kleber.motta/repos/.opencode/scripts/check-all.sh
 
 Capture the output exactly.
 
-Persist the full verification transcript to each write target:
+Persist the full verification transcript to:
 
-`$REPO_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt`
+`$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt`
 
 Include:
 - the exact command that was run
@@ -104,9 +104,9 @@ If `GRAPH_REPORT.md` exists, pass only a short summary or relevant excerpt to th
 
 ## Step 3 — Persist Review Report
 
-Persist the returned markdown report to each write target:
+Persist the returned markdown report to:
 
-`$REPO_ROOT/docs/specs/{feature-slug}/state/check-review.md`
+`$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-review.md`
 
 Always overwrite the previous full-check report with the latest one.
 
