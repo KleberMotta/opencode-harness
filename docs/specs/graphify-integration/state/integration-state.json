@@ -1,0 +1,25 @@
+{
+  "featureSlug": "graphify-integration",
+  "featureBranch": "feature/graphify-integration",
+  "baseBranch": "feature/graphify-integration",
+  "baseRef": "feature/graphify-integration",
+  "baseStartPoint": "2de58d6f0989887b9d9cde30265b4aacb3d82946",
+  "createdAt": "2026-04-30T00:07:49.520Z",
+  "lastUpdatedAt": "2026-04-30T00:20:45.763Z",
+  "tasks": {
+    "1": {
+      "taskID": "1",
+      "validatedCommit": "dda4d4aa976a4e4415111b6af7bcb79c753feaa1",
+      "attempt": 1,
+      "taskLabel": "Phase 0: habilitar commit único de doc-sync no /j.unify",
+      "recordedAt": "2026-04-30T00:12:47.926Z",
+      "integration": {
+        "status": "direct",
+        "method": "direct-commit",
+        "featureBranch": "feature/graphify-integration",
+        "integratedAt": "2026-04-30T00:12:48.189Z",
+        "integratedCommit": "dda4d4aa976a4e4415111b6af7bcb79c753feaa1"
+      }
+    }
+  }
+}

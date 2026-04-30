@@ -4,7 +4,7 @@ import type { JuninhoConfig } from "../lib/j.juninho-config"
 
 export const CONFIG_PATH = path.resolve(
   import.meta.dir,
-  "..",
+  "../..",
   "juninho-config.json",
 )
 

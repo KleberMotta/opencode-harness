@@ -11,7 +11,7 @@ Generate or update `AGENTS.md`, domain docs, and principle docs using the curren
 
 ## What happens
 
-1. Read `.opencode/juninho-config.json` to understand documentation-related workflow defaults
+1. Read `juninho-config.json` to understand documentation-related workflow defaults
 2. Read `.opencode/state/active-plan.json` to discover write targets (if active)
 3. Resolve the target project:
    - If a path/domain argument is provided, resolve the containing project root

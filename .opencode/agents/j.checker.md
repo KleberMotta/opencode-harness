@@ -1,7 +1,6 @@
 ---
 description: Full quality-gate orchestrator — runs repo-wide checks, delegates multi-pass review to j.reviewer, writes check-review.md, and returns clear reentry instructions for j.implement when blocked.
 mode: subagent
-model: github-copilot/gpt-5.4
 tools:
   task: true
 ---
@@ -22,7 +21,7 @@ You are NOT the code reviewer yourself. The qualitative review must come from `@
 ## Required Inputs
 
 Read in this order when they exist:
-1. `.opencode/juninho-config.json`
+1. `juninho-config.json`
 2. `.opencode/state/active-plan.json` — discover all write targets and their `targetRepoRoot` paths
 
 Then, for each write target project (`$REPO_ROOT`):
@@ -33,6 +32,7 @@ Then, for each write target project (`$REPO_ROOT`):
 7. `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
 8. existing `$REPO_ROOT/docs/specs/{feature-slug}/state/check-review.md` when present
 9. existing `$REPO_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt` when present
+10. optional `$REPO_ROOT/docs/domain/graphify/GRAPH_REPORT.md` when present; never ingest raw `graph.json`
 
 Infer `{feature-slug}` from the active plan when not explicitly provided.
 For multi-project plans, perform the same artifact read/write contract for every write target project involved. All `docs/specs/` paths are relative to each target's `$REPO_ROOT`.
@@ -75,10 +75,12 @@ The reviewer prompt must explicitly say:
 - review the current integrated branch as a post-implement quality gate
 - use multiple passes:
   - correctness / bugs / edge cases / failure paths
-  - spec / plan / domain / rule alignment and runtime blind spots
+  - spec / plan / domain / rule alignment, runtime blind spots, and cross-domain edges
   - simplicity / bloat / over-engineering / maintainability
 - read `functional-validation-plan.md` when it exists
 - read `CONTEXT.md` and treat it as the durable business/research intent source for spec/plan alignment
+- read `docs/domain/graphify/GRAPH_REPORT.md` when it exists and use it as summary-only context; if Graphify CLI is available, use `graphify explain` for suspicious cross-domain edges
+- if Graphify is disabled, stale, missing, or unavailable, record a NOTE/validation gap only and continue the review
 - write the report body for persistence to `docs/specs/{feature-slug}/state/check-review.md`
 - include exactly these section headings in markdown:
   - `# Code Review`
@@ -95,6 +97,8 @@ The reviewer prompt must explicitly say:
   - `## Overall: ...`
 
 If the reviewer needs more context, provide it and re-delegate.
+
+If `GRAPH_REPORT.md` exists, pass only a short summary or relevant excerpt to the reviewer. Do not persist or attach raw `graph.json` to `check-review.md` or `check-all-output.txt`.
 
 ---
 

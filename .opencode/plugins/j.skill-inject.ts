@@ -115,31 +115,36 @@ export default (async ({ directory }: { directory: string }) => {
       if (!filePath) return
 
       const skillMap = getSkillMap(filePath)
-      const match = skillMap.find(({ pattern }) => pattern.test(filePath))
-      if (!match) return
-
-      const key = `${input.sessionID}:${match.skill}`
+      const matches = skillMap.filter(({ pattern }) => pattern.test(filePath))
+      if (matches.length === 0) return
 
       if (input.tool === "Read") {
-        if (injectedSkills.has(key)) return
-        injectedSkills.add(key)
+        const injectedBlocks: string[] = []
+        for (const match of matches) {
+          const key = `${input.sessionID}:${match.skill}`
+          if (injectedSkills.has(key)) continue
 
-        const skillPath = resolveSkillPath(directory, match.skill, filePath)
-        if (!skillPath) return
+          const skillPath = resolveSkillPath(directory, match.skill, filePath)
+          if (!skillPath) continue
 
-        const skillContent = readFileSync(skillPath, "utf-8")
-        output.output +=
-          `\n\n[skill-inject] Skill activated for ${match.skill} (${match.source}):\n\n${skillContent}`
+          injectedSkills.add(key)
+          const skillContent = readFileSync(skillPath, "utf-8")
+          injectedBlocks.push(`\n\n[skill-inject] Skill activated for ${match.skill} (${match.source}):\n\n${skillContent}`)
+        }
+        if (injectedBlocks.length > 0) output.output += injectedBlocks.join("")
       } else if (["Write", "Edit", "MultiEdit"].includes(input.tool)) {
-        if (injectedSkills.has(key)) return
+        const reminders: string[] = []
+        for (const match of matches) {
+          const key = `${input.sessionID}:${match.skill}`
+          if (injectedSkills.has(key)) continue
 
-        const skillPath = resolveSkillPath(directory, match.skill, filePath)
-        if (!skillPath) return
+          const skillPath = resolveSkillPath(directory, match.skill, filePath)
+          if (!skillPath) continue
 
-        injectedSkills.add(key)
-        output.output +=
-          `\n\n[skill-inject] IMPORTANT: Skill "${match.skill}" (${match.source}) exists for this file type. ` +
-          `Read the matching file first to receive full skill instructions.`
+          injectedSkills.add(key)
+          reminders.push(`[skill-inject] IMPORTANT: Skill "${match.skill}" (${match.source}) exists for this file type. Read the matching file first to receive full skill instructions.`)
+        }
+        if (reminders.length > 0) output.output += `\n\n${reminders.join("\n")}`
       }
     },
   }

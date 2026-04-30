@@ -57,7 +57,6 @@ const IGNORED_DIRS = new Set([
   "node_modules",
   "target",
   "tmp",
-  "worktrees",
 ])
 
 const discoveryCache = new Map<string, string[]>()
@@ -213,6 +212,11 @@ export function resolveTargetProjectRoot(workspaceRoot: string, hints: ProjectHi
 
 export function resolvePathFromProjectRoot(projectRoot: string, value: string): string {
   return path.isAbsolute(value) ? value : path.join(projectRoot, value)
+}
+
+export function getGraphifyPath(targetRepoRoot: string, outputDir = "docs/domain/graphify"): string {
+  const trimmedOutputDir = outputDir.trim() || "docs/domain/graphify"
+  return path.isAbsolute(trimmedOutputDir) ? trimmedOutputDir : path.join(targetRepoRoot, trimmedOutputDir)
 }
 
 export function resolveProjectPaths(workspaceRoot: string, hints: ProjectHints = {}): ProjectPaths | null {

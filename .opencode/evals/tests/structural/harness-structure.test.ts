@@ -189,28 +189,43 @@ describe("harness structural contracts", () => {
     }
   })
 
-  test("spec and plan agents use GPT 5.5", () => {
+  test("agent models in opencode.json match juninho-config.json tiers via template", () => {
     const root = repoRoot()
-    const agentFiles = [
-      ".opencode/agents/j.spec.md",
-      ".opencode/agents/j.spec-writer.md",
-      ".opencode/agents/j.plan.md",
-      ".opencode/agents/j.planner.md",
-      ".opencode/agents/j.plan-reviewer.md",
-    ]
-    const config = JSON.parse(readFileSync(path.join(root, "opencode.json"), "utf-8")) as {
-      agent: Record<string, { model: string }>
+    const juninhoConfig = JSON.parse(
+      readFileSync(path.join(root, "juninho-config.json"), "utf-8"),
+    ) as { models: { strong: string; medium: string; weak: string } }
+    const opencodeConfig = JSON.parse(
+      readFileSync(path.join(root, "opencode.json"), "utf-8"),
+    ) as { agent: Record<string, { model: string }> }
+    const templateContent = readFileSync(path.join(root, "opencode.template.json"), "utf-8")
+
+    expect(juninhoConfig.models.strong).toBeTruthy()
+    expect(juninhoConfig.models.medium).toBeTruthy()
+    expect(juninhoConfig.models.weak).toBeTruthy()
+
+    // Template must use placeholders
+    expect(templateContent).toContain("__STRONG_MODEL__")
+    expect(templateContent).toContain("__MEDIUM_MODEL__")
+    expect(templateContent).toContain("__WEAK_MODEL__")
+
+    // Generated opencode.json must NOT contain placeholders
+    const generatedContent = readFileSync(path.join(root, "opencode.json"), "utf-8")
+    expect(generatedContent).not.toContain("__STRONG_MODEL__")
+    expect(generatedContent).not.toContain("__MEDIUM_MODEL__")
+    expect(generatedContent).not.toContain("__WEAK_MODEL__")
+
+    // Strong-tier agents
+    const strongAgents = ["j.planner", "j.plan-reviewer", "j.spec-writer", "j.validator", "j.reviewer", "j.checker", "j.unify", "j.plan", "j.spec"]
+    for (const agent of strongAgents) {
+      expect(opencodeConfig.agent[agent]?.model).toBe(juninhoConfig.models.strong)
     }
 
-    for (const relativePath of agentFiles) {
-      const content = readFileSync(path.join(root, relativePath), "utf-8")
-      expect(content).toContain("model: github-copilot/gpt-5.5")
-    }
+    // Medium-tier agents
+    expect(opencodeConfig.agent["j.implementer"]?.model).toBe(juninhoConfig.models.medium)
 
-    expect(config.agent["j.spec"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.spec-writer"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.plan"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.planner"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.plan-reviewer"].model).toBe("github-copilot/gpt-5.5")
+    // Weak-tier agents
+    for (const agent of ["j.explore", "j.librarian"]) {
+      expect(opencodeConfig.agent[agent]?.model).toBe(juninhoConfig.models.weak)
+    }
   })
 })

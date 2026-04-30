@@ -1,0 +1,23 @@
+#!/bin/sh
+# Wrapper for `opencode` that loads .env so {env:JUNINHO_*_MODEL} tokens
+# in opencode.json resolve correctly.
+#
+# Usage: bin/oc [opencode args...]
+# The dev runs `bin/oc` instead of `opencode` directly.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "oc: .env not found — copy .env.example to .env and fill in your model IDs" >&2
+  exit 1
+fi
+
+# Export all non-comment, non-empty lines from .env
+set -a
+. "$ENV_FILE"
+set +a
+
+exec opencode "$@"

@@ -36,10 +36,22 @@ Project type: **node-generic**
 | `/j.finish-setup` | Bootstrap repo knowledge: AGENTS hierarchy, dynamic skills, domain/principles docs |
 | `/j.pr-review` | Advisory review of current branch diff |
 | `/j.status` | Show `execution-state.md` summary |
-| `/j.unify` | Reconcile, update docs, cleanup integrated worktrees, create PR |
+| `/j.unify` | Reconcile, update docs, cleanup integrated task bookkeeping, create PR |
+| `npm run graphify:build` | Build optional Graphify output for a target repo (`--force` for manual smoke) |
+| `npm run graphify:refresh` | Run incremental Graphify refresh when explicitly enabled |
+| `npm run graphify:status` | Inspect Graphify enabled/output/cache status without building |
 | `/j.start-work <task>` | Initialize a focused work session |
 | `/j.handoff` | Prepare end-of-session handoff doc |
 | `/j.ulw-loop` | Maximum parallelism mode |
+
+## Optional Graphify
+
+- `/j.finish-setup` Phase 7 bootstraps Graphify only when `workflow.graphify.enabled` is true.
+- Enabled flow runs `npm run graphify:build -- --repo "$PROJECT_ROOT"` and writes outputs to `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`.
+- Disabled flow records an intentional skip; no watch mode, git hook, or pre-commit automation is allowed.
+- Graphify integrates via CLI (`graphify query`, `graphify path`, `graphify explain`) and the official opencode skill/plugin — not as an MCP server. The legacy `mcp.graphify` entry in `opencode.json` is disabled.
+- `/j.unify` may run `npm run graphify:refresh -- --repo "$REPO_ROOT" --incremental` before the doc-sync commit only when both `workflow.unify.refreshGraphify` and `workflow.graphify.enabled` are true.
+- Any refreshed `docs/domain/graphify/**` files must land in the same gated doc-sync commit; Graphify refresh never creates its own commit.
 
 ## Agent Roster
 
@@ -48,6 +60,7 @@ Three-phase pipeline orchestrated internally:
 - **Phase 1 (Metis)**: Spawns `@j.explore` + `@j.librarian` in parallel, classifies intent
 - **Phase 2 (Prometheus)**: Interviews developer (proportional to complexity), writes `CONTEXT.md` + `plan.md`
 - **Phase 3 (Momus)**: Loops with `@j.plan-reviewer` until OKAY
+- Optional Graphify layer: reads `docs/domain/graphify/GRAPH_REPORT.md` when present, cites at least one relevant god node in Phase 1, and falls back to normal research when Graphify is disabled, stale, or missing.
 
 ### @j.plan-reviewer
 Internal to planner. Executability gate — approval bias, max 3 issues.
@@ -57,11 +70,12 @@ Internal to planner. Executability gate — approval bias, max 3 issues.
 Writes `docs/specs/{feature-slug}/spec.md` plus rich `CONTEXT.md` with explorer findings, vocabulary, identifier mappings, constraints, decisions, anti-patterns, and key files.
 
 ### @j.implementer
-READ→ACT→COMMIT→VALIDATE loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with git worktrees for parallel tasks.
+READ→ACT→COMMIT→VALIDATE loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with task-scoped subagents on a shared feature branch.
 Pre-commit stays fast: structure lint + related tests. Hashline-aware editing.
 Uses the canonical branch `feature/{slug}` for task commits and supports focused single-task execution via `/j.implement-task`.
 Writes canonical state to `docs/specs/{slug}/state/**` and records approved task commits in `integration-state.json` during implementation.
 Repo-wide checks happen after implementer exits.
+- Optional Graphify layer: may consult `GRAPH_REPORT.md` or `graphify path` CLI for task-scoped read-time coupling hints, but never widens scope based on Graphify alone.
 
 ### @j.validator
 Reads spec and full `CONTEXT.md` BEFORE code. BLOCK / FIX / NOTE / APPROVED.
@@ -69,21 +83,25 @@ Can fix FIX-tier issues directly. Writes per-task audit trail to `docs/specs/{sl
 
 ### @j.reviewer
 Detailed read-only reviewer. Used via `/j.pr-review` and by `/j.check` to generate actionable follow-up findings.
+- Optional Graphify layer: Pass 2 may use `GRAPH_REPORT.md` plus `graphify explain` CLI for cross-domain edge review; missing Graphify is a NOTE, not a defect.
 
 ### @j.checker
 Full quality-gate orchestrator. Runs `.opencode/scripts/check-all.sh`, delegates multi-pass review to `@j.reviewer`, persists `check-review.md`, and returns reentry guidance for `@j.implementer`.
+- Optional Graphify layer: passes `GRAPH_REPORT.md` summary to `@j.reviewer` when available and never persists raw `graph.json`.
 
 ### @j.unify
-Closes the loop according to `.opencode/juninho-config.json` under `workflow`.
-Can update docs, cleanup integrated task worktrees/branches, and create PRs when those steps are enabled.
+Closes the loop according to `juninho-config.json` under `workflow`.
+Can update docs, create one gated doc-sync commit, cleanup integrated task bookkeeping, and create PRs when those steps are enabled.
 
 ### @j.explore
 Fast read-only codebase research. Spawned by planner Phase 1.
 Maps files, patterns, and constraints before the developer interview.
+- Optional Graphify layer: consults `GRAPH_REPORT.md` and `graphify query` CLI before broad grep for god nodes/coupling hotspots, then confirms with normal code search.
 
 ### @j.librarian
 External docs and OSS research. Spawned by planner Phase 1.
 Fetches official API docs via Context7 MCP and context-mode MCP.
+- Optional Graphify layer: during `/j.unify` refresh, summarizes `GRAPH_REPORT.md` diffs before doing new web research.
 
 ## Context Tiers
 
@@ -118,6 +136,10 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 | `j.hashline-edit` | Edit | Validate hash references before editing |
 | `j.memory` | First tool call + compaction | Inject persistent project memory |
 
+Optional Graphify plugin layer (when present in this repo's `.opencode/plugins/`):
+- `j.graphify-inject` should inject only a short `GRAPH_REPORT.md` summary, never `graph.json`
+- `j.graphify-stale-warn` should emit non-blocking freshness/cache warnings only
+
 ## Custom Tools
 
 | Tool | Purpose |
@@ -132,6 +154,14 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 | `lsp_symbols` | File outline or workspace symbol search |
 | `ast_grep_search` | Structural code pattern search |
 | `ast_grep_replace` | Structural pattern replacement (with dryRun) |
+| `getGraphifyPath` | Shared helper resolving target-local `docs/domain/graphify` output paths |
+
+Optional Graphify CLI layer (requires `graphify` installed via `uv tool install graphifyy`):
+- `graphify query "<question>" --graph <path>` for god nodes, hotspots, and dependency-heavy areas
+- `graphify path "A" "B" --graph <path>` for scoped path tracing between known files/symbols
+- `graphify explain "X" --graph <path>` for cross-domain edge inspection
+- Always prefer `docs/domain/graphify/GRAPH_REPORT.md` over raw `graph.json` in agent prompts and reports
+- If Graphify is disabled, stale, or missing, fall back to context-mode, grep, and LSP
 
 ## Skills (injected automatically by file pattern)
 
@@ -140,6 +170,8 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 | `j.test-writing` | `*.test.ts`, `*.spec.ts` | Jest/Vitest AAA pattern |
 | `j.agents-md-writing` | `**/AGENTS.md` | Directory-local agent guidance |
 | `j.domain-doc-writing` | `docs/domain/**/*.md` | Business behavior and sync markers |
+| `j.graphify-usage` | `docs/domain/graphify/**`, Graphify-aware agents/commands | Safe use of `GRAPH_REPORT.md`, `graphify query`, `graphify path`, and `graphify explain` |
+| `j.context-mode-usage` | Graphify/context-mode docs and agents | Decision rules between Graphify, context-mode, grep/Glob, and LSP |
 | `j.planning-artifact-writing` | `docs/specs/**/{spec,CONTEXT,plan}.md` + workflow prompts | Durable context and ambiguity-free plans |
 | `j.principle-doc-writing` | `docs/principles/**` | Cross-cutting technical rules |
 | `j.shell-script-writing` | `.opencode/scripts/**/*.sh`, `scripts/**/*.sh`, hooks | Fast, safe automation scripts |
@@ -148,7 +180,7 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 
 | File | Purpose |
 |------|---------|
-| `.opencode/juninho-config.json` | Models plus `workflow` toggles for automation, implement, unify, artifact commits, and documentation behavior |
+| `juninho-config.json` (repo root) | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement, unify, artifact commits, and documentation behavior |
 | `.opencode/state/active-plan.json` | Session-level pointer to the active spec/plan bundle — consumed by plan-autoload and write-time guards |
 | `.opencode/skill-map.json` | Dynamic skill-to-pattern mapping — extended by /j.finish-setup |
 | `.opencode/state/persistent-context.md` | Long-term project knowledge — reconciled by UNIFY |
@@ -168,5 +200,6 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 - Domain docs: `docs/domain/{domain}/*.md` — indexed in `docs/domain/INDEX.md`
 - Principles: `docs/principles/{topic}.md` — registered in `docs/principles/manifest`
 - Sync markers: `<!-- juninho:sync source=... hash=... -->` to track doc↔code alignment
-- Implementation history: exactly one implementation commit per task on `feature/{slug}`; optional feature-state artifact commits happen only in `/j.unify` when enabled.
+- Implementation history: exactly one implementation commit per task on `feature/{slug}`; optional `/j.unify` commits are limited to one doc-sync commit gated by `workflow.unify.commitDocUpdates` and one feature-state artifact commit gated by `workflow.unify.commitFeatureArtifacts`.
 - Hierarchical `AGENTS.md`: root + `src/` + `src/{module}/` — generated by `/j.finish-setup`
+- Scratch / temp data: ALWAYS use `/Users/kleber.motta/repos/tmp/` (set `TMPDIR=/Users/kleber.motta/repos/tmp`) for sandboxes, eval runs, scratch files, and any throwaway output. NEVER use `/var/folders/...`, `/tmp`, or `os.tmpdir()` defaults — those paths are outside the workspace permission scope and will fail to read back. Example: `TMPDIR=/Users/kleber.motta/repos/tmp bun ./.opencode/evals/lib/opencode-behavioral-runner.ts`.

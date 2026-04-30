@@ -2,24 +2,21 @@
   "mcp": {
     "context7": {
       "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@upstash/context7-mcp@latest"
-      ]
+      "command": ["npx", "-y", "@upstash/context7-mcp@latest"]
     },
     "context-mode": {
       "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "context-mode@latest"
-      ]
+      "command": ["npx", "-y", "context-mode@latest"]
+    },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "enabled": true
     }
   },
   "agent": {
     "j.planner": {
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "write": "allow",
         "bash": "allow",
@@ -34,7 +31,7 @@
       }
     },
     "j.plan-reviewer": {
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "task": "deny",
         "bash": "deny",
@@ -44,7 +41,7 @@
       }
     },
     "j.spec-writer": {
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "bash": "deny",
         "write": "allow",
@@ -71,7 +68,7 @@
       }
     },
     "j.validator": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -81,7 +78,7 @@
       }
     },
     "j.reviewer": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "bash": "deny",
         "write": "deny",
@@ -91,7 +88,7 @@
       }
     },
     "j.checker": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -104,7 +101,7 @@
       }
     },
     "j.unify": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -134,7 +131,7 @@
       }
     },
     "j.plan": {
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "task": {
           "*": "deny",
@@ -147,7 +144,7 @@
       }
     },
     "j.spec": {
-      "model": "github-copilot/gpt-5.5",
+      "model": "github-copilot/claude-opus-4.7",
       "permission": {
         "task": {
           "*": "deny",

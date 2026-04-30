@@ -238,6 +238,27 @@ describe("context injection plugins", () => {
     expect(nonTriggerSession.output).not.toContain("j.mapper-writing")
   })
 
+  test("skill injector activates multiple skills when multiple patterns match the same file", async () => {
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "skill-map.json"),
+      JSON.stringify([
+        { pattern: "Controller\\.kt$", skill: "j.controller-writing" },
+        { pattern: "SampleController\\.kt$", skill: "j.mapper-writing" },
+      ], null, 2) + "\n",
+      "utf-8"
+    )
+
+    const harness = await createHarness(["j.skill-inject.ts"])
+    const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
+
+    const session = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "Read", sessionID: "multi-s-1", callID: "1", args: { file_path: filePath } }, session)
+
+    expect(session.output).toContain("[skill-inject] Skill activated for j.controller-writing")
+    expect(session.output).toContain("[skill-inject] Skill activated for j.mapper-writing")
+    expect(session.output).toContain("MAPPER-SKILL-MARKER")
+  })
+
   test("carl preloads task-scoped and canonical context for child sessions before reads", async () => {
     writeExecutionState(tempRoot, "**Goal**: update payment controller\n- [ ] task: update payment endpoint\n")
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")

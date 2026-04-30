@@ -28,6 +28,14 @@
     "skill": "j.planning-artifact-writing"
   },
   {
+    "pattern": "(^|\\/)docs\\/domain\\/graphify\\/.*(?:\\.md|\\.json|\\.html)$|(^|\\/)\\.opencode\\/(agents|commands)\\/j\\.(explore|planner|reviewer|checker|implementer|librarian|unify|finish-setup)\\.md$",
+    "skill": "j.graphify-usage"
+  },
+  {
+    "pattern": "(^|\\/)AGENTS\\.md$|(^|\\/)\\.opencode\\/(agents|skills)\\/.*(graphify|context-mode).*\\.md$|(^|\\/)docs\\/specs\\/graphify-integration\\/.*\\.md$",
+    "skill": "j.context-mode-usage"
+  },
+  {
     "pattern": "(^|\\/)(\\.opencode\\/scripts|scripts)\\/.*\\.sh$",
     "skill": "j.shell-script-writing"
   },

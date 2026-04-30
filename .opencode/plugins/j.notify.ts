@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { execFileSync } from "child_process"
 import { platform } from "os"
+import { loadJuninhoConfig } from "../lib/j.juninho-config"
 
 const TITLE = "opencode"
 
@@ -32,6 +33,9 @@ function sendNotification(message: string): void {
 
 export default (async (_ctx: { directory: string }) => ({
   "session.idle": async (_input: Record<string, unknown>, output: { metadata?: Record<string, unknown> }) => {
+    const config = loadJuninhoConfig(_ctx.directory)
+    if (config.workflow?.implement?.watchdogSessionStale === false) return
+
     const reason = typeof output.metadata?.reason === "string" ? output.metadata.reason : "idle session detected"
     sendNotification(reason)
   },

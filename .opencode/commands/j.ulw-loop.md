@@ -28,7 +28,7 @@ Activate high-throughput mode — work until all tasks in the plan are complete.
 14. Loop continues until all tasks across all write targets are marked complete
 15. Record each APPROVED task commit in the target's `docs/specs/{feature-slug}/state/integration-state.json`
 16. Run `/j.check` once task-level work is done; this must validate the canonical plan branch in every target repo
-17. `@j.unify` runs only if closeout is enabled in `.opencode/juninho-config.json` under `workflow.unify.enabled` and should only do closeout/cleanup/PR work
+17. `@j.unify` runs only if closeout is enabled in `juninho-config.json` under `workflow.unify.enabled` and should only do closeout/cleanup/PR work
 
 ## When to use
 
@@ -59,7 +59,7 @@ Wave 3:
 - Shared-branch execution keeps commit history linear and predictable
 - Each task carries its own lease in feature-local state; heartbeat-only file updates are opt-in
 - Stale tasks can be retried once without allowing two attempts to commit concurrently
-- Cleanup applies only to harness bookkeeping artifacts, not task worktrees
+- Cleanup applies only to harness bookkeeping artifacts recorded in `integration-state.json`
 - Code integration happens immediately because each task commits directly into the canonical feature branch
 - UNIFY performs cleanup only; it must not be responsible for first-time code integration
 - If any wave fails, the loop pauses and reports blockers — read `docs/specs/{slug}/state/` for details

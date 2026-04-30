@@ -1,5 +1,5 @@
 #!/bin/sh
-# _read-config.sh — shared helper to read .opencode/juninho-config.json values.
+# _read-config.sh — shared helper to read juninho-config.json values.
 #
 # Usage (source this file, then call functions):
 #   . "$(dirname "$0")/_read-config.sh"
@@ -8,8 +8,9 @@
 #
 # Resolution order:
 #   1. $JUNINHO_CONFIG_PATH if set
-#   2. $WORKSPACE_ROOT/.opencode/juninho-config.json (preferred)
-#   3. $TARGET_REPO_ROOT/.opencode/juninho-config.json (project override, fallback)
+#   2. $WORKSPACE_ROOT/juninho-config.json (preferred — root of workspace)
+#   3. $WORKSPACE_ROOT/.opencode/juninho-config.json (legacy fallback)
+#   4. $TARGET_REPO_ROOT/juninho-config.json (project override)
 #
 # Requires WORKSPACE_ROOT and/or TARGET_REPO_ROOT exported (by _resolve-repo.sh).
 #
@@ -21,12 +22,16 @@ __config_resolve_path() {
     printf '%s' "$JUNINHO_CONFIG_PATH"
     return 0
   fi
+  if [ -n "${WORKSPACE_ROOT:-}" ] && [ -f "$WORKSPACE_ROOT/juninho-config.json" ]; then
+    printf '%s' "$WORKSPACE_ROOT/juninho-config.json"
+    return 0
+  fi
   if [ -n "${WORKSPACE_ROOT:-}" ] && [ -f "$WORKSPACE_ROOT/.opencode/juninho-config.json" ]; then
     printf '%s' "$WORKSPACE_ROOT/.opencode/juninho-config.json"
     return 0
   fi
-  if [ -n "${TARGET_REPO_ROOT:-}" ] && [ -f "$TARGET_REPO_ROOT/.opencode/juninho-config.json" ]; then
-    printf '%s' "$TARGET_REPO_ROOT/.opencode/juninho-config.json"
+  if [ -n "${TARGET_REPO_ROOT:-}" ] && [ -f "$TARGET_REPO_ROOT/juninho-config.json" ]; then
+    printf '%s' "$TARGET_REPO_ROOT/juninho-config.json"
     return 0
   fi
   return 1

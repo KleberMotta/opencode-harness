@@ -10,7 +10,7 @@ Invoke the `@j.unify` agent to reconcile plan vs delivery and execute only the e
 
 ## What happens
 
-1. Read `.opencode/juninho-config.json` (`workflow` section)
+1. Read `juninho-config.json` (`workflow` section)
 2. Read `.opencode/state/active-plan.json` to discover all write targets
 3. For each write target (`$REPO_ROOT`), reconcile `$REPO_ROOT/docs/specs/{feature-slug}/plan.md` vs actual git diff — mark tasks DONE/PARTIAL/SKIPPED
 4. Run only the enabled closeout steps per target, such as:
@@ -35,7 +35,7 @@ By this point, code must already be committed into `feature/{feature-slug}`.
 
 ## Note
 
-UNIFY behavior is controlled by `.opencode/juninho-config.json` under `workflow`.
+UNIFY behavior is controlled by `juninho-config.json` under `workflow`.
 If PR creation, doc updates, or feature artifact commits are disabled there, `@j.unify` should skip those steps and report what was intentionally not executed.
 UNIFY is no longer responsible for first-time code integration.
 UNIFY should avoid creating final synthetic code/doc commits; history should already reflect the planned task commits by the time `/j.unify` runs. The only optional commit is `docs/specs/{feature-slug}/state/**` artifacts when `workflow.unify.commitFeatureArtifacts` is `true`.

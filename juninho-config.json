@@ -1,8 +1,10 @@
 {
-  "strong": "github-copilot/gpt-5.5",
-  "medium": "github-copilot/gpt-5.5",
-  "weak": "github-copilot/claude-haiku-4.5",
   "projectType": "node-generic",
+  "models": {
+    "strong": "github-copilot/claude-opus-4.7",
+    "medium": "github-copilot/gpt-5.4",
+    "weak": "github-copilot/claude-haiku-4.5"
+  },
   "workflow": {
     "automation": {
       "nonInteractive": false,
@@ -22,10 +24,19 @@
       "updatePersistentContext": true,
       "updateDomainDocs": false,
       "updateDomainIndex": false,
-      "cleanupIntegratedTaskBranches": true,
+      "cleanupIntegratedTaskBookkeeping": true,
+      "commitDocUpdates": true,
+      "refreshGraphify": false,
       "commitFeatureArtifacts": false,
       "createPullRequest": false,
       "createDeliveryPrBody": false
+    },
+    "graphify": {
+      "enabled": false,
+      "outputDir": "docs/domain/graphify",
+      "staleAfterDays": 7,
+      "maxCacheMb": 100,
+      "installMethod": "pipx"
     },
     "documentation": {
       "preferAgentsMdForLocalRules": true,

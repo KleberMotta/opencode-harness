@@ -4,7 +4,8 @@
 # Then unignore the allowed entries
 !/.gitignore
 !/AGENTS.md
-!/opencode.json
+!/opencode.template.json
+!/juninho-config.json
 !/.opencode
 !/docs
 !/tmp

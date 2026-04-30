@@ -1,0 +1,188 @@
+{
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp@latest"]
+    },
+    "context-mode": {
+      "type": "local",
+      "command": ["npx", "-y", "context-mode@latest"]
+    },
+    "exa": {
+      "type": "remote",
+      "url": "https://mcp.exa.ai/mcp",
+      "enabled": true
+    }
+  },
+  "agent": {
+    "j.planner": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "write": "allow",
+        "bash": "allow",
+        "task": {
+          "*": "deny",
+          "j.explore": "allow",
+          "j.librarian": "allow",
+          "j.plan-reviewer": "allow"
+        },
+        "edit": "deny",
+        "question": "allow"
+      }
+    },
+    "j.plan-reviewer": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "task": "deny",
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "question": "deny"
+      }
+    },
+    "j.spec-writer": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "deny",
+        "write": "allow",
+        "edit": "deny",
+        "task": {
+          "*": "deny",
+          "j.explore": "allow"
+        },
+        "question": "allow"
+      }
+    },
+    "j.implementer": {
+      "model": "__MEDIUM_MODEL__",
+      "permission": {
+        "bash": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "task": {
+          "*": "deny",
+          "j.implementer": "allow",
+          "j.validator": "allow"
+        },
+        "question": "deny"
+      }
+    },
+    "j.validator": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "task": "deny",
+        "question": "deny"
+      }
+    },
+    "j.reviewer": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "task": "deny",
+        "question": "deny"
+      }
+    },
+    "j.checker": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "task": {
+          "*": "deny",
+          "j.reviewer": "allow"
+        },
+        "question": "deny"
+      }
+    },
+    "j.unify": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "task": "deny",
+        "question": "deny"
+      }
+    },
+    "j.explore": {
+      "model": "__WEAK_MODEL__",
+      "permission": {
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "task": "deny",
+        "question": "deny"
+      }
+    },
+    "j.librarian": {
+      "model": "__WEAK_MODEL__",
+      "permission": {
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "task": "deny",
+        "question": "deny"
+      }
+    },
+    "j.plan": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "j.planner": "allow"
+        },
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "question": "deny"
+      }
+    },
+    "j.spec": {
+      "model": "__STRONG_MODEL__",
+      "permission": {
+        "task": {
+          "*": "deny",
+          "j.spec-writer": "allow"
+        },
+        "bash": "deny",
+        "write": "deny",
+        "edit": "deny",
+        "question": "deny"
+      }
+    }
+  },
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "github-copilot": {
+      "models": {
+        "gpt-5.4-OK": {
+          "limit": {
+            "context": 400000,
+            "output": 32000
+          }
+        }
+      }
+    }
+  },
+  "permission": {
+    "*": "allow",
+    "doom_loop": "deny",
+    "external_directory": {
+      "*": "deny",
+      "~/repos/**": "allow",
+      "~/.config/opencode/**": "allow"
+    },
+    "read": {
+      "*": "allow",
+      "*.env": "allow",
+      "*.env.*": "allow",
+      "*.env.example": "allow"
+    }
+  }
+}

@@ -1,7 +1,6 @@
 ---
 description: Executability gate for plans. Approval bias — rejects only genuine blockers. Max 3 issues. Used internally by planner (Phase 3). Do not call directly.
 mode: subagent
-model: github-copilot/gpt-5.5
 tools:
   task: false
   bash: false
