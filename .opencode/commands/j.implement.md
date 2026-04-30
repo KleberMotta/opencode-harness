@@ -24,7 +24,8 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
 1. If a repo path or plan/spec/context path is provided, that explicit target takes precedence over the workspace `active-plan.json`.
 2. `@j.implementer` reads the active `plan.md` and full `CONTEXT.md` for every write target. The context is not optional business memory.
 3. Reads `juninho-config.json` (`workflow` section) to understand implement, watchdog, handoff, and UNIFY behavior.
-4. If `/j.implement` receives no specific task/file, it executes against the whole active plan. For multi-project plans, it must iterate all `writeTargets`, resolving each target project's `planPath`, `specPath`, `contextPath`, and state artifact paths to absolute paths before reading or delegating.
+4. **If `workflow.implement.singleTaskMode` is `true`**: execute only the next pending task (first incomplete in wave order), finalize it, report status + progress to the developer, and STOP. Do not proceed to the next task. The developer must invoke `/j.implement` again to continue.
+5. If `/j.implement` receives no specific task/file, it executes against the whole active plan. For multi-project plans, it must iterate all `writeTargets`, resolving each target project's `planPath`, `specPath`, `contextPath`, and state artifact paths to absolute paths before reading or delegating.
 5. If a specific task/file or repo path is provided, it narrows scope to that target while still respecting dependencies and the latest `check-review.md` findings.
 6. Creates or switches to a single canonical plan branch `feature/{feature-slug}` for the entire run.
 6. Delegates each implementation task to its own task-scoped `@j.implementer` subagent so every task starts with a fresh context window.

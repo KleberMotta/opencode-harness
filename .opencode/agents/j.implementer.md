@@ -51,6 +51,7 @@ Hard rules:
 - Because all task commits land on the same branch, task execution must be serialized at commit time. Do not have two task workers editing and committing simultaneously.
 - A task-scoped invocation, including `/j.implement-task`, must execute only the requested task id for the resolved target repo. Do not continue into sibling tasks or later waves.
 - If a task-scoped prompt includes `Target Project` or `targetProject`, treat that project as authoritative and ignore same-numbered task ids in other write targets.
+- **When `workflow.implement.singleTaskMode` is `true`**: after the first task-worker returns COMPLETE (or FAILED/BLOCKED), the workflow owner MUST stop. It must NOT spawn the next task worker. It must report progress and exit immediately. This is a HARD stop — no exceptions.
 
 ## Before Starting
 
@@ -82,7 +83,7 @@ Hard rules:
     - read absolute `validatorWorkPath` if it exists
     - for each dependency `{dep}`, read its execution state and validator log if they exist
 10. If you are orchestrating the whole feature, read all existing absolute target-local `state/tasks/task-*/execution-state.md` files to understand progress and resumability per write target.
-11. Read `juninho-config.json` and follow `workflow.implement` exactly, including `watchdogSessionStale` and `refreshExecutionHeartbeat`.
+11. Read `juninho-config.json` and follow `workflow.implement` exactly, including `watchdogSessionStale`, `refreshExecutionHeartbeat`, and `singleTaskMode`.
 12. Ensure state directories exist:
 
 ```bash
@@ -176,7 +177,29 @@ Before COMMIT, before VALIDATE, and before writing final task state, re-read you
 - If the task file shows a newer `Attempt` than yours, stop immediately.
 - If the task file is no longer `IN_PROGRESS`, stop instead of writing competing results.
 
+## Single Task Mode
+
+When `workflow.implement.singleTaskMode` is `true`, the workflow owner executes exactly **one task** per `/j.implement` invocation and then returns control to the developer with a status report.
+
+Behavior:
+
+1. Identify the next pending task (first incomplete task in wave order, respecting dependencies).
+2. Execute that single task through the full READ→ACT→STATE→COMMIT→VALIDATE loop.
+3. After the task is COMPLETE (or FAILED/BLOCKED), **stop immediately** and report to the developer:
+   - Task id and summary
+   - Status (COMPLETE / FAILED / BLOCKED)
+   - Validated commit SHA (if COMPLETE)
+   - Files modified
+   - Next pending task id and summary (for developer awareness)
+   - Total progress: `{completed}/{total}` tasks
+4. Do NOT proceed to the next task. Wait for the developer to invoke `/j.implement` again.
+5. This mode enables iterative review: the developer can inspect each task's output, request corrections, and only then proceed.
+
+When `singleTaskMode` is `false` (default), the workflow owner executes all tasks across all waves as normal batch behavior.
+
 ## Wave Execution
+
+**singleTaskMode gate**: If `workflow.implement.singleTaskMode` is `true`, execute ONLY ONE task from the wave loop below. After that one task-worker returns, finalize its bookkeeping and STOP. Report to the developer and exit. Do not enter the loop for additional tasks.
 
 For each write target, then for each wave in that target's plan:
 
@@ -369,7 +392,9 @@ When invoked as a task-scoped worker from `/j.implement-task` or an `Execute tas
 
 ## Completion
 
-When all tasks in all waves are complete for all write targets:
+When `workflow.implement.singleTaskMode` is `true`, completion means a single task is done — return immediately after finalizing that task's state and bookkeeping. Report progress and stop.
+
+When all tasks in all waves are complete for all write targets (or when `singleTaskMode` is `false` and the current wave is done):
 
 1. Verify all target-local `task-*/execution-state.md` files show COMPLETE for every write target.
 2. Ensure the current branch is `feature/{feature-slug}` (run via the Bash tool with `workdir="$REPO_ROOT"`):

@@ -73,6 +73,7 @@ Writes `docs/specs/{feature-slug}/spec.md` plus rich `CONTEXT.md` with explorer 
 READ→ACT→COMMIT→VALIDATE loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with task-scoped subagents on a shared feature branch.
 Pre-commit stays fast: structure lint + related tests. Hashline-aware editing.
 Uses the canonical branch `feature/{slug}` for task commits and supports focused single-task execution via `/j.implement-task`.
+When `workflow.implement.singleTaskMode` is `true`, executes one task per invocation and returns to the developer for review before proceeding.
 Writes canonical state to `docs/specs/{slug}/state/**` and records approved task commits in `integration-state.json` during implementation.
 Repo-wide checks happen after implementer exits.
 - Optional Graphify layer: may consult `GRAPH_REPORT.md` or `graphify path` CLI for task-scoped read-time coupling hints, but never widens scope based on Graphify alone.
@@ -180,7 +181,7 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 
 | File | Purpose |
 |------|---------|
-| `juninho-config.json` (repo root) | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement, unify, artifact commits, and documentation behavior |
+| `juninho-config.json` (repo root) | Models (`strong/medium/weak`) plus `workflow` toggles for automation, implement (including `singleTaskMode`), unify, artifact commits, and documentation behavior |
 | `.opencode/state/active-plan.json` | Session-level pointer to the active spec/plan bundle — consumed by plan-autoload and write-time guards |
 | `.opencode/skill-map.json` | Dynamic skill-to-pattern mapping — extended by /j.finish-setup |
 | `.opencode/state/persistent-context.md` | Long-term project knowledge — reconciled by UNIFY |
@@ -193,6 +194,43 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 | `docs/specs/{slug}/state/tasks/task-{id}/runtime.json` | Runtime metadata for watchdog/orchestration |
 | `docs/specs/{slug}/state/sessions/{sessionID}-runtime.json` | Session runtime ownership metadata |
 | `docs/specs/{slug}/state/integration-state.json` | Canonical feature integration manifest |
+
+## Auto-Learning Directive
+
+**Canonical rule**: whenever the developer instructs corrections to an implementation (code pattern errors, naming issues, wrong approaches, missed conventions), the agent MUST self-assess whether the correction reveals a gap in the harness knowledge base.
+
+### Trigger
+
+Any time the developer:
+- Requests changes to code that was already implemented by the agent
+- Points out pattern violations, naming mistakes, or architectural drift
+- Rejects an approach and explains why
+
+### Flow
+
+1. **Self-assess**: After applying the correction, evaluate what caused the error:
+   - Missing or insufficient skill documentation?
+   - Missing pattern in `AGENTS.md` (root or directory-scoped)?
+   - Missing domain doc or principle doc?
+   - Missing or unclear `CONTEXT.md` constraint?
+   - Missing canonical example in `find_pattern`?
+
+2. **Propose**: Present a concise proposal to the developer:
+   - **Where**: exact file(s) that should be updated (e.g., `.opencode/skills/j.service-writing/SKILL.md`, `src/AGENTS.md`, `docs/principles/naming.md`)
+   - **What**: the specific rule/pattern/example to add
+   - **Why**: how this prevents the same class of error from recurring
+
+3. **Ask**: "Deseja que eu atualize [file] com essa regra para que o erro não se repita?" (or equivalent in the conversation language)
+
+4. **Act or skip**: If the developer approves, apply the update. If rejected, move on without insisting.
+
+### Constraints
+
+- Never update harness/skills/docs without developer approval.
+- Keep proposals atomic — one concern per proposal. If multiple gaps were found, list them separately.
+- Do not propose changes to `plan.md`, `spec.md`, or `CONTEXT.md` of the current feature — those are immutable during implementation.
+- Proposals must be concrete (exact file + exact content), not vague suggestions.
+- This directive applies to ALL agents that receive correction feedback, not only the implementer.
 
 ## Conventions
 

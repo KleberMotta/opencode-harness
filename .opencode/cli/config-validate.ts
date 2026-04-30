@@ -30,6 +30,7 @@ const ALLOWED_IMPLEMENT = new Set([
   "reenterImplementOnFullCheckFailure",
   "watchdogSessionStale",
   "refreshExecutionHeartbeat",
+  "singleTaskMode",
 ])
 
 const ALLOWED_UNIFY = new Set([

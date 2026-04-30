@@ -17,7 +17,8 @@
       "postImplementFullCheck": true,
       "reenterImplementOnFullCheckFailure": true,
       "watchdogSessionStale": false,
-      "refreshExecutionHeartbeat": false
+      "refreshExecutionHeartbeat": false,
+      "singleTaskMode": true
     },
     "unify": {
       "enabled": true,
