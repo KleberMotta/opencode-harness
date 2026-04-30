@@ -59,7 +59,7 @@ Wave 3:
 - Shared-branch execution keeps commit history linear and predictable
 - Each task carries its own lease in feature-local state; heartbeat-only file updates are opt-in
 - Stale tasks can be retried once without allowing two attempts to commit concurrently
-- Cleanup applies only to harness bookkeeping artifacts, not task worktrees
+- Cleanup applies only to harness bookkeeping artifacts recorded in `integration-state.json`
 - Code integration happens immediately because each task commits directly into the canonical feature branch
 - UNIFY performs cleanup only; it must not be responsible for first-time code integration
 - If any wave fails, the loop pauses and reports blockers — read `docs/specs/{slug}/state/` for details

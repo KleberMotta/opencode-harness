@@ -1,7 +1,6 @@
 ---
 description: Tab-selectable planning entrypoint. Delegates to j.planner.
 mode: primary
-model: github-copilot/gpt-5.5
 permission:
   task: allow
   bash: deny

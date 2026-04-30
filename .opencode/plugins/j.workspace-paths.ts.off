@@ -44,7 +44,6 @@ const IGNORED_DIRS = new Set([
   "node_modules",
   "target",
   "tmp",
-  "worktrees",
 ])
 
 const discoveryCache = new Map<string, string[]>()

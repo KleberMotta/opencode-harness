@@ -1,7 +1,6 @@
 ---
 description: Tab-selectable spec entrypoint. Delegates to j.spec-writer.
 mode: primary
-model: github-copilot/gpt-5.5
 permission:
   task: allow
   bash: deny

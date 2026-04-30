@@ -18,6 +18,9 @@
     "state:show": "bun .opencode/cli/state-show.ts",
     "state:clear-task": "bun .opencode/cli/state-clear-task.ts",
     "skills:list": "bun .opencode/cli/skills-list.ts",
-    "agents:list": "bun .opencode/cli/agents-list.ts"
+    "agents:list": "bun .opencode/cli/agents-list.ts",
+    "graphify:build": "bun .opencode/cli/graphify-build.ts",
+    "graphify:refresh": "bun .opencode/cli/graphify-build.ts --incremental",
+    "graphify:status": "bun .opencode/cli/graphify-status.ts"
   }
 }

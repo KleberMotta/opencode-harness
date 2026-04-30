@@ -16,6 +16,8 @@ export type JuninhoConfig = {
     }
     implement?: {
       preCommitScope?: string
+      skipLintOnPrecommit?: boolean
+      skipTestOnPrecommit?: boolean
       postImplementFullCheck?: boolean
       reenterImplementOnFullCheckFailure?: boolean
       watchdogSessionStale?: boolean
@@ -26,9 +28,19 @@ export type JuninhoConfig = {
       updatePersistentContext?: boolean
       updateDomainDocs?: boolean
       updateDomainIndex?: boolean
-      cleanupIntegratedTaskBranches?: boolean
+      cleanupIntegratedTaskBookkeeping?: boolean
+      commitDocUpdates?: boolean
+      refreshGraphify?: boolean
+      commitFeatureArtifacts?: boolean
       createPullRequest?: boolean
       createDeliveryPrBody?: boolean
+    }
+    graphify?: {
+      enabled?: boolean
+      outputDir?: string
+      staleAfterDays?: number
+      maxCacheMb?: number
+      installMethod?: string
     }
     documentation?: {
       preferAgentsMdForLocalRules?: boolean
@@ -47,6 +59,8 @@ const DEFAULT_CONFIG: JuninhoConfig = {
     },
     implement: {
       preCommitScope: "related",
+      skipLintOnPrecommit: false,
+      skipTestOnPrecommit: false,
       postImplementFullCheck: true,
       reenterImplementOnFullCheckFailure: true,
       watchdogSessionStale: true,
@@ -57,9 +71,19 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       updatePersistentContext: true,
       updateDomainDocs: true,
       updateDomainIndex: true,
-      cleanupIntegratedTaskBranches: true,
+      cleanupIntegratedTaskBookkeeping: true,
+      commitDocUpdates: true,
+      refreshGraphify: false,
+      commitFeatureArtifacts: false,
       createPullRequest: true,
       createDeliveryPrBody: true,
+    },
+    graphify: {
+      enabled: false,
+      outputDir: "docs/domain/graphify",
+      staleAfterDays: 7,
+      maxCacheMb: 100,
+      installMethod: "pipx",
     },
     documentation: {
       preferAgentsMdForLocalRules: true,
@@ -118,6 +142,10 @@ export function loadJuninhoConfig(directory: string): JuninhoConfig {
             ...DEFAULT_CONFIG.workflow?.unify,
             ...parsed.workflow?.unify,
           },
+          graphify: {
+            ...DEFAULT_CONFIG.workflow?.graphify,
+            ...parsed.workflow?.graphify,
+          },
           documentation: {
             ...DEFAULT_CONFIG.workflow?.documentation,
             ...parsed.workflow?.documentation,
@@ -150,6 +178,10 @@ export function loadJuninhoConfig(directory: string): JuninhoConfig {
           unify: {
             ...DEFAULT_CONFIG.workflow?.unify,
             ...parsed.workflow?.unify,
+          },
+          graphify: {
+            ...DEFAULT_CONFIG.workflow?.graphify,
+            ...parsed.workflow?.graphify,
           },
           documentation: {
             ...DEFAULT_CONFIG.workflow?.documentation,

@@ -5,7 +5,7 @@ set -e
 #
 # Dual-mode invocation:
 #   single-target (default): operates on $TARGET_REPO_ROOT (env) or the repo
-#     resolved from CWD via _resolve-repo.sh. All 11 subcommands supported.
+#     resolved from CWD via _resolve-repo.sh.
 #   --all-targets: iterates every writeTargets[].targetRepoRoot from the
 #     workspace's .opencode/state/active-plan.json, re-invoking the script
 #     with TARGET_REPO_ROOT set per target. Whitelisted subcommands only:
@@ -202,10 +202,6 @@ resolve_base_ref() {
   esac
 }
 
-task_branch_name() {
-  printf 'feature/%s-task-%s' "$1" "$2"
-}
-
 find_existing_feature_commit() {
   feature_branch="$1"
   validated_commit="$2"
@@ -343,50 +339,6 @@ NODE
 ' "$base_start_point"
     ;;
 
-  prepare-task-branch)
-    feature_slug="${2:-}"
-    task_id="${3:-}"
-    depends_csv="${4:-}"
-    worktree_directory="${5:-}"
-
-    [ -n "$feature_slug" ] || fail "Usage: prepare-task-branch <feature-slug> <task-id> [depends-csv] [worktree-directory]"
-    [ -n "$task_id" ] || fail "Missing task id"
-
-    manifest="$(manifest_path "$feature_slug")"
-    [ -f "$manifest" ] || fail "Missing integration manifest: $manifest"
-
-    task_branch="$(task_branch_name "$feature_slug" "$task_id")"
-    task_base="$(TARGET_REPO_ROOT="$ROOT_DIR" sh "$0" print-task-base "$feature_slug" "$depends_csv")"
-
-    if [ -n "$worktree_directory" ]; then
-      if [ -d "$worktree_directory" ]; then
-        printf '%s
-' "$task_branch"
-        exit 0
-      fi
-
-      parent_dir=$(dirname "$worktree_directory")
-      [ -d "$parent_dir" ] || fail "Missing worktree parent directory: $parent_dir"
-
-      if git show-ref --verify --quiet "refs/heads/$task_branch"; then
-        git worktree add "$worktree_directory" "$task_branch" >/dev/null
-      else
-        git worktree add -b "$task_branch" "$worktree_directory" "$task_base" >/dev/null
-      fi
-      printf '%s
-' "$task_branch"
-      exit 0
-    fi
-
-    if git show-ref --verify --quiet "refs/heads/$task_branch"; then
-      git switch "$task_branch" >/dev/null
-    else
-      git switch -c "$task_branch" "$task_base" >/dev/null
-    fi
-    printf '%s
-' "$task_branch"
-    ;;
-
   switch)
     feature_slug="${2:-}"
     [ -n "$feature_slug" ] || fail "Usage: switch <feature-slug>"
@@ -412,41 +364,31 @@ NODE
   record-task)
     feature_slug="${2:-}"
     task_id="${3:-}"
-    task_branch="${4:-}"
-    validated_commit="${5:-}"
-    attempt="${6:-}"
-    worktree_directory="${7:-}"
-    task_label="${8:-}"
+    validated_commit="${4:-}"
+    attempt="${5:-}"
+    task_label="${6:-}"
 
-    [ -n "$feature_slug" ] || fail "Usage: record-task <feature-slug> <task-id> <task-branch> <validated-commit> <attempt> [worktree] [label]"
+    [ -n "$feature_slug" ] || fail "Usage: record-task <feature-slug> <task-id> <validated-commit> <attempt> [label]"
     [ -n "$task_id" ] || fail "Missing task id"
-    [ -n "$task_branch" ] || fail "Missing task branch"
     [ -n "$validated_commit" ] || fail "Missing validated commit"
     [ -n "$attempt" ] || fail "Missing attempt"
 
     manifest="$(manifest_path "$feature_slug")"
     [ -f "$manifest" ] || fail "Missing integration manifest: $manifest"
 
-    task_tip="$(git rev-parse "refs/heads/$task_branch" 2>/dev/null || printf '%s' "$validated_commit")"
-
-    FEATURE_SLUG="$feature_slug" TASK_ID="$task_id" TASK_BRANCH="$task_branch" VALIDATED_COMMIT="$validated_commit" TASK_TIP="$task_tip" TASK_ATTEMPT="$attempt" WORKTREE_DIRECTORY="$worktree_directory" TASK_LABEL="$task_label" MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
+    FEATURE_SLUG="$feature_slug" TASK_ID="$task_id" VALIDATED_COMMIT="$validated_commit" TASK_ATTEMPT="$attempt" TASK_LABEL="$task_label" MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
 const fs = require("fs")
 
 const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"))
-const existing = manifest.tasks?.[process.env.TASK_ID]
 
 manifest.tasks = manifest.tasks || {}
 manifest.tasks[process.env.TASK_ID] = {
-  ...(existing || {}),
   taskID: process.env.TASK_ID,
-  taskBranch: process.env.TASK_BRANCH,
   validatedCommit: process.env.VALIDATED_COMMIT,
-  taskTip: process.env.TASK_TIP,
   attempt: Number(process.env.TASK_ATTEMPT),
-  worktreeDirectory: process.env.WORKTREE_DIRECTORY || "",
   taskLabel: process.env.TASK_LABEL || "",
   recordedAt: new Date().toISOString(),
-  integration: existing?.integration || { status: "pending" },
+  integration: { status: "pending" },
 }
 manifest.lastUpdatedAt = new Date().toISOString()
 fs.writeFileSync(process.env.MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n", "utf8")
@@ -468,13 +410,16 @@ NODE
 
     feature_branch="$(json_read_field "$manifest" "featureBranch")" || fail "Unable to read feature branch"
     validated_commit="$(json_read_field "$manifest" "tasks.$task_id.validatedCommit")" || fail "Task $task_id has no validated commit"
-    task_branch="$(json_read_field "$manifest" "tasks.$task_id.taskBranch")" || fail "Task $task_id has no task branch"
 
     git switch "$feature_branch" >/dev/null
 
     integration_status="already-contained"
     integration_method="ancestor"
-    if git merge-base --is-ancestor "$validated_commit" HEAD; then
+    if [ "$(git rev-parse HEAD)" = "$validated_commit" ]; then
+      integration_status="direct"
+      integration_method="direct-commit"
+      integrated_commit="$validated_commit"
+    elif git merge-base --is-ancestor "$validated_commit" HEAD; then
       integrated_commit="$validated_commit"
     elif git cherry "$feature_branch" "$validated_commit" 2>/dev/null | grep -q "^- $validated_commit$"; then
       integration_method="patch-equivalent"
@@ -494,7 +439,7 @@ NODE
       integrated_commit="$(git rev-parse HEAD)"
     fi
 
-    TASK_ID="$task_id" INTEGRATED_STATUS="$integration_status" INTEGRATION_METHOD="$integration_method" INTEGRATED_COMMIT="$integrated_commit" FEATURE_BRANCH="$feature_branch" TASK_BRANCH="$task_branch" MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
+    TASK_ID="$task_id" INTEGRATED_STATUS="$integration_status" INTEGRATION_METHOD="$integration_method" INTEGRATED_COMMIT="$integrated_commit" FEATURE_BRANCH="$feature_branch" MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
 const fs = require("fs")
 
 const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"))
@@ -506,7 +451,6 @@ task.integration = {
   status: process.env.INTEGRATED_STATUS,
   method: process.env.INTEGRATION_METHOD,
   featureBranch: process.env.FEATURE_BRANCH,
-  taskBranch: process.env.TASK_BRANCH,
   integratedAt: new Date().toISOString(),
   integratedCommit: process.env.INTEGRATED_COMMIT,
 }
@@ -527,30 +471,6 @@ NODE
 
     feature_branch="$(json_read_field "$manifest" "featureBranch")" || fail "Unable to read feature branch"
     git switch "$feature_branch" >/dev/null
-
-    cleanup_rows="$(MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
-const fs = require("fs")
-
-const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"))
-for (const [taskId, task] of Object.entries(manifest.tasks || {})) {
-  if (!task?.integration?.status || task.integration.status === "pending") continue
-  process.stdout.write(taskId + "\t" + (task.taskBranch || "") + "\t" + (task.worktreeDirectory || "") + "\n")
-}
-NODE
-    )"
-
-    if [ -n "$cleanup_rows" ]; then
-      printf '%s
-' "$cleanup_rows" | while IFS="$TAB" read -r task_id task_branch worktree_directory; do
-        if [ -n "$worktree_directory" ] && [ -d "$worktree_directory" ]; then
-          git worktree remove "$worktree_directory" >/dev/null
-        fi
-
-        if [ -n "$task_branch" ] && [ "$task_branch" != "$feature_branch" ] && git show-ref --verify --quiet "refs/heads/$task_branch"; then
-          git branch -d "$task_branch" >/dev/null
-        fi
-      done
-    fi
 
     MANIFEST_PATH="$manifest" "$JS_RUNTIME" - <<'NODE'
 const fs = require("fs")

@@ -1,7 +1,6 @@
 ---
 description: Produces structured specifications through a 5-phase interview. Write access to docs/specs/ only. Use for /j.spec command before implementing complex features.
 mode: subagent
-model: github-copilot/gpt-5.5
 tools:
   bash: false
   task: true

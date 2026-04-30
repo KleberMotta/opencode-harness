@@ -11,6 +11,7 @@
 !README.md
 !/package.json
 !/.github
+!/bin
 
 # Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
 /tmp/*

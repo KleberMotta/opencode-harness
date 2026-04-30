@@ -25,7 +25,7 @@ export type JuninhoConfig = {
       updatePersistentContext?: boolean
       updateDomainDocs?: boolean
       updateDomainIndex?: boolean
-      cleanupIntegratedTaskBranches?: boolean
+      cleanupIntegratedTaskBookkeeping?: boolean
       createPullRequest?: boolean
       createDeliveryPrBody?: boolean
     }
@@ -55,7 +55,7 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       updatePersistentContext: true,
       updateDomainDocs: true,
       updateDomainIndex: true,
-      cleanupIntegratedTaskBranches: true,
+      cleanupIntegratedTaskBookkeeping: true,
       createPullRequest: true,
       createDeliveryPrBody: true,
     },

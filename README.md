@@ -274,8 +274,9 @@ Delega para `@j.unify`. Lê os toggles de `juninho-config.json` (`workflow.unify
 │ 3. Se updateDomainDocs: refresh de           │
 │    docs/domain/                              │
 │                                              │
-│ 4. Se cleanupIntegratedTaskBranches:         │
-│    cleanup usando integration-state.json     │
+│ 4. Se cleanupIntegratedTaskBookkeeping:      │
+│    cleanup de bookkeeping em                 │
+│    integration-state.json                    │
 │                                              │
 │ 5. Se commitFeatureArtifacts: commit dos     │
 │    arquivos de docs/specs/{slug}/state/**    │
@@ -297,8 +298,8 @@ Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos 
 
 | Chave | Significado | Valor atual |
 |---|---|---|
-| `strong` | Modelo "forte" para planner/spec-writer/checker | `github-copilot/gpt-5.5` |
-| `medium` | Padrão dos demais agentes | `github-copilot/gpt-5.5` |
+| `strong` | Modelo "forte" para planner/spec-writer/checker | `github-copilot/gpt-5.4` |
+| `medium` | Padrão dos demais agentes | `github-copilot/gpt-5.4` |
 | `weak` | Para tarefas baratas (parsing, classificação leve) | `github-copilot/claude-haiku-4.5` |
 
 ### 5.2 Project metadata
@@ -336,7 +337,7 @@ Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos 
 | `updatePersistentContext` | `true` | Reconcilia `.opencode/state/persistent-context.md` |
 | `updateDomainDocs` | `true` | Refresca `docs/domain/` por target |
 | `updateDomainIndex` | `true` | Atualiza `docs/domain/INDEX.md` |
-| `cleanupIntegratedTaskBranches` | `true` | Limpa branches/worktrees integrados |
+| `cleanupIntegratedTaskBookkeeping` | `true` | Marca cleanup do bookkeeping das tasks integradas |
 | `commitFeatureArtifacts` | (não-default `false` aqui) | Cria commit opcional de `docs/specs/{slug}/state/**` |
 | `createPullRequest` | `true` no default, `false` aqui | Roda `gh pr create` |
 | `createDeliveryPrBody` | `true` no default, `false` aqui | Gera corpo de PR rico (purpose/problem/solution/changes/validation) |
@@ -354,8 +355,8 @@ Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos 
 
 ```json
 {
-  "strong":  "github-copilot/gpt-5.5",
-  "medium":  "github-copilot/gpt-5.5",
+  "strong":  "github-copilot/gpt-5.4",
+  "medium":  "github-copilot/gpt-5.4",
   "weak":    "github-copilot/claude-haiku-4.5",
   "projectType": "node-generic",
   "workflow": {
@@ -372,7 +373,7 @@ Arquivo: `~/repos/.opencode/juninho-config.json` (também procurado em projetos 
       "updatePersistentContext": true,
       "updateDomainDocs": false,
       "updateDomainIndex": false,
-      "cleanupIntegratedTaskBranches": true,
+      "cleanupIntegratedTaskBookkeeping": true,
       "commitFeatureArtifacts": false,
       "createPullRequest": false,
       "createDeliveryPrBody": false
@@ -465,6 +466,69 @@ Família atual (em `.opencode/skills/`):
 - **Meta:** `skill-creator` (cria/refina skills, define cenários de eval)
 
 Cada `SKILL.md` contém: quando aplicar, regras canônicas, exemplos do código real, anti-padrões e checklist.
+
+---
+
+## 9.1 Graphify — Knowledge Graph opcional
+
+[Graphify](https://graphify.net) é uma ferramenta open-source que gera knowledge graphs a partir de código. O harness Juninho integra-o **opcionalmente** como camada de contexto para os agentes.
+
+### Instalação
+
+```bash
+uv tool install graphifyy   # instala o CLI `graphify`
+graphify opencode install    # instala skill + plugin globais para o opencode
+```
+
+### Como funciona no harness
+
+1. **Build**: `npm run graphify:build -- --repo <target-repo> --force` gera o grafo a partir do AST do código-fonte.
+2. **Output canônico**: os artefatos ficam em `<target-repo>/docs/domain/graphify/`:
+   - `graph.json` — grafo queryable (nós = classes/funções/conceitos, arestas = dependências/chamadas)
+   - `GRAPH_REPORT.md` — relatório com god nodes, surprises e perguntas sugeridas
+   - `graph.html` — visualização interativa
+   - `cache/` — cache incremental
+3. **Consulta pelos agentes**: via CLI no bash (não MCP):
+   ```bash
+   graphify query "what are the most coupled classes" --graph <target>/docs/domain/graphify/graph.json
+   graphify path "ClassA" "ClassB" --graph <path>
+   graphify explain "ClassName" --graph <path>
+   ```
+4. **Injeção automática**: o plugin `j.graphify-inject` injeta um resumo do `GRAPH_REPORT.md` na primeira tool call de cada sessão. O plugin `j.graphify-stale-warn` emite warnings quando o output está velho.
+
+### Controle via config
+
+Em `.opencode/juninho-config.json`:
+```json
+{
+  "workflow": {
+    "graphify": {
+      "enabled": false,
+      "outputDir": "docs/domain/graphify",
+      "staleAfterDays": 7,
+      "maxCacheMb": 100
+    }
+  }
+}
+```
+
+- `enabled: false` (default) → nenhum build automático; smoke manual com `--force`
+- `enabled: true` → `/j.finish-setup` Phase 7 faz build; `/j.unify` faz refresh incremental
+
+### Quando usar
+
+| Situação | Usar? |
+|----------|-------|
+| Entender god nodes antes de refatorar | ✓ `graphify query` |
+| Verificar acoplamento entre 2 classes | ✓ `graphify path` |
+| Cross-domain edge review | ✓ `graphify explain` |
+| Buscar uma definição exata de classe | ✗ use grep/LSP |
+| Substituir leitura de código | ✗ Graphify é hint, não verdade |
+
+### Skills relacionadas
+
+- `graphify` (oficial) — instrui o assistente a rodar o pipeline `/graphify` completo
+- `j.graphify-usage` — regras de uso seguro pelos agents internos do harness
 
 ---
 
@@ -635,7 +699,7 @@ Todos rodam a partir de `~/repos/`:
 | `bun config:validate` | Valida chaves desconhecidas + tipos básicos | `bun config:validate` |
 | `bun model:list` | Lista modelos `strong/medium/weak` ativos | `bun model:list` |
 | `bun model:set-strong <id>` | Troca o modelo `strong` (usado por planner, implementer, validator…) | `bun model:set-strong github-copilot/claude-opus-4.7` |
-| `bun model:set-medium <id>` | Troca o modelo `medium` | `bun model:set-medium github-copilot/gpt-5.5` |
+| `bun model:set-medium <id>` | Troca o modelo `medium` | `bun model:set-medium github-copilot/gpt-5.4` |
 | `bun model:set-weak <id>` | Troca o modelo `weak` (explore, librarian) | `bun model:set-weak github-copilot/claude-haiku-4.5` |
 | `bun toggle <key.path> <value>` | Edita qualquer toggle em `workflow.*` (prefixo `workflow.` é inferido se omitido) | `bun toggle unify.createPullRequest true` |
 | `bun plan:active` | Mostra o plano ativo (writeTargets + referenceProjects) | `bun plan:active` |
@@ -651,12 +715,12 @@ Todos rodam a partir de `~/repos/`:
 ```bash
 cd ~/repos
 bun model:list
-# strong:  github-copilot/gpt-5.5
-# medium:  github-copilot/gpt-5.5
+# strong:  github-copilot/gpt-5.4
+# medium:  github-copilot/gpt-5.4
 # weak:    github-copilot/claude-haiku-4.5
 
 bun model:set-strong github-copilot/claude-opus-4.7
-# strong: github-copilot/gpt-5.5 → github-copilot/claude-opus-4.7
+# strong: github-copilot/gpt-5.4 → github-copilot/claude-opus-4.7
 
 bun config:validate
 # config válida

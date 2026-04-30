@@ -189,28 +189,36 @@ describe("harness structural contracts", () => {
     }
   })
 
-  test("spec and plan agents use GPT 5.5", () => {
+  test("agent models resolve dynamically via {env:JUNINHO_<TIER>_MODEL}", () => {
     const root = repoRoot()
-    const agentFiles = [
-      ".opencode/agents/j.spec.md",
-      ".opencode/agents/j.spec-writer.md",
-      ".opencode/agents/j.plan.md",
-      ".opencode/agents/j.planner.md",
-      ".opencode/agents/j.plan-reviewer.md",
-    ]
-    const config = JSON.parse(readFileSync(path.join(root, "opencode.json"), "utf-8")) as {
-      agent: Record<string, { model: string }>
+    const juninhoConfig = JSON.parse(
+      readFileSync(path.join(root, ".opencode", "juninho-config.json"), "utf-8"),
+    ) as { strong: string; medium: string; weak: string }
+    const opencodeConfig = JSON.parse(
+      readFileSync(path.join(root, "opencode.json"), "utf-8"),
+    ) as { agent: Record<string, { model: string }> }
+    const { AGENTS_BY_TIER } = require("../../../cli/_tier-map") as {
+      AGENTS_BY_TIER: Record<"strong" | "medium" | "weak", string[]>
     }
 
-    for (const relativePath of agentFiles) {
-      const content = readFileSync(path.join(root, relativePath), "utf-8")
-      expect(content).toContain("model: github-copilot/gpt-5.5")
-    }
+    expect(juninhoConfig.strong).toBeTruthy()
+    expect(juninhoConfig.medium).toBeTruthy()
+    expect(juninhoConfig.weak).toBeTruthy()
 
-    expect(config.agent["j.spec"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.spec-writer"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.plan"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.planner"].model).toBe("github-copilot/gpt-5.5")
-    expect(config.agent["j.plan-reviewer"].model).toBe("github-copilot/gpt-5.5")
+    for (const tier of ["strong", "medium", "weak"] as const) {
+      const expectedToken = `{env:JUNINHO_${tier.toUpperCase()}_MODEL}`
+      for (const agentName of AGENTS_BY_TIER[tier]) {
+        // Frontmatter MUST NOT declare `model:` — it would override the env token.
+        const agentFile = path.join(root, ".opencode", "agents", `${agentName}.md`)
+        const content = readFileSync(agentFile, "utf-8")
+        expect(content).not.toMatch(/^model:\s*\S+/m)
+
+        // opencode.json MUST use the env interpolation for this agent.
+        const opencodeEntry = opencodeConfig.agent[agentName]
+        if (opencodeEntry) {
+          expect(opencodeEntry.model).toBe(expectedToken)
+        }
+      }
+    }
   })
 })

@@ -1,0 +1,33 @@
+#!/bin/sh
+# Wrapper for `opencode` that exports JUNINHO_{STRONG,MEDIUM,WEAK}_MODEL
+# from `.opencode/juninho-config.json` so that `agent.<name>.model` tokens
+# (`{env:JUNINHO_<TIER>_MODEL}`) in `opencode.json` resolve dynamically.
+#
+# Project agents must NOT declare `model:` in their frontmatter, otherwise
+# the static frontmatter overrides this env interpolation.
+set -e
+
+# Resolve project root (directory containing .opencode/juninho-config.json).
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG="$PROJECT_ROOT/.opencode/juninho-config.json"
+
+if [ ! -f "$CONFIG" ]; then
+  echo "oc: $CONFIG not found — run from a Juninho-enabled repo" >&2
+  exit 1
+fi
+
+# Extract tier values via node (always available where opencode runs).
+eval "$(node -e '
+  const c = require(process.argv[1]);
+  for (const t of ["strong","medium","weak"]) {
+    const v = c[t];
+    if (typeof v !== "string" || !v) {
+      console.error("oc: missing juninho-config." + t);
+      process.exit(2);
+    }
+    console.log("export JUNINHO_" + t.toUpperCase() + "_MODEL=" + JSON.stringify(v));
+  }
+' "$CONFIG")"
+
+exec opencode "$@"
