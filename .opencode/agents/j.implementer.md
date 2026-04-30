@@ -438,6 +438,7 @@ Do NOT create task branches, arbitrary merges, or PRs.
 ## Anti-patterns
 
 - Never bypass the pre-commit hook with `--no-verify`
+- Never commit if `.git/hooks/pre-commit` does not exist in the target repo — fail with: `"Pre-commit hook not installed. Run: $WORKSPACE_ROOT/.opencode/scripts/install-target-hooks.sh --repo <target>"`
 - Never create task branches for this harness
 - Never run two task commits concurrently on the shared feature branch
 - Never skip the READ step

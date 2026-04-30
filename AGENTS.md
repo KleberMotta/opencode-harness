@@ -1,7 +1,6 @@
 # AGENTS.md
 
 This project uses the **Agentic Coding Framework** v2.1 — installed by [juninho](https://github.com/KleberMotta/juninho).
-Project type: **node-generic**
 
 ## Workflows
 

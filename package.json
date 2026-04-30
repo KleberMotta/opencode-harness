@@ -19,6 +19,7 @@
     "state:clear-task": "bun .opencode/cli/state-clear-task.ts",
     "skills:list": "bun .opencode/cli/skills-list.ts",
     "agents:list": "bun .opencode/cli/agents-list.ts",
+    "hooks:install": "sh .opencode/scripts/install-target-hooks.sh",
     "graphify:build": "bun .opencode/cli/graphify-build.ts",
     "graphify:refresh": "bun .opencode/cli/graphify-build.ts --incremental",
     "graphify:status": "bun .opencode/cli/graphify-status.ts",
