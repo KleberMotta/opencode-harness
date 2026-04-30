@@ -37,15 +37,15 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
     - `.opencode/scripts/build-verify.sh`
     - `.opencode/scripts/test-related.sh`
     - focused test execution is routed through `.opencode/scripts/run-test-scope.sh`
-11. Spawns `@j.validator` after each task commit to validate the just-implemented task against spec/plan intent, QA expectations, and code quality expectations within task scope.
-12. Task state, validator state, implementer log, retry budget, and runtime metadata all live under `docs/specs/{feature-slug}/state/` in the **workspace root** (not in each target project). State is centralized regardless of write target count.
+11. Does NOT auto-invoke `j.validator` after each task commit. Validation is handled by explicit `j.validator` tasks placed at strategic intervals in the plan by the planner.
+12. Task state, implementer log, retry budget, and runtime metadata all live under `docs/specs/{feature-slug}/state/` in the **workspace root** (not in each target project). State is centralized regardless of write target count.
 13. Canonical task commit bookkeeping is tracked in `docs/specs/{feature-slug}/state/integration-state.json` (workspace root).
-14. A task is only marked COMPLETE after its single implementation commit succeeds, validator approval is written, and the task bookkeeping for that commit is recorded successfully.
+14. A task is only marked COMPLETE after its single implementation commit succeeds and the task bookkeeping for that commit is recorded successfully.
 15. The task commit must contain code/config deliverables only; do not create a second commit for state artifacts during implementation.
 16. If `workflow.implement.watchdogSessionStale` is enabled, watchdog notifications may surface stalled sessions, but notifications never block the run.
-17. Before final exit on a successful whole-feature run, request a feature-level validator pass to write `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md`.
-18. Exit only when code changes, task-level tests, and target-local functional validation plans are complete for every write target on `feature/{feature-slug}`.
-19. The caller then runs `.opencode/scripts/check-all.sh` or `/j.check`, which validate the canonical plan branch using `check-review.md` plus `functional-validation-plan.md`.
+17. If a commit for the current task already exists (interrupted attempt/resume), uses `git commit --amend` to maintain exactly one commit per task.
+18. Exit only when code changes and task-level tests are complete for every write target on `feature/{feature-slug}`.
+19. The caller then runs `.opencode/scripts/check-all.sh` or `/j.check` for repo-wide verification.
 20. If the repo-wide check fails, delegate back to `@j.implementer` with the failing output and those generated artifacts.
 21. If that reentry requires changing work from a task that is already COMPLETE, the harness should create a new follow-up task instead of reopening the completed one.
 
@@ -75,7 +75,7 @@ When ANY sub-agent returns output:
 ## After implementation
 
 Run `/j.check` for repo-wide verification.
-If `/j.check` fails, invoke `/j.implement` again with the failing output, `check-review.md`, and `functional-validation-plan.md`.
+If `/j.check` fails, invoke `/j.implement` again with the failing output and `check-review.md`.
 Treat the `## Reentry Contract` section inside `check-review.md` as the authoritative next-action contract when it is present.
 If the correction applies to already completed work, create a new follow-up task first and implement that task forward-only.
 Run `/j.unify` only after the full check passes and `juninho-config.json` enables UNIFY.
