@@ -1,7 +1,7 @@
 {
   "models": {
-    "strong": "github-copilot/claude-opus-4.7",
-    "medium": "github-copilot/gpt-5.4",
+    "strong": "github-copilot/claude-opus-4.6",
+    "medium": "github-copilot/claude-sonnet-4.6",
     "weak": "github-copilot/claude-haiku-4.5"
   },
   "workflow": {
@@ -32,7 +32,7 @@
       "createDeliveryPrBody": false
     },
     "graphify": {
-      "enabled": false,
+      "enabled": true,
       "outputDir": "docs/domain/graphify",
       "staleAfterDays": 7,
       "maxCacheMb": 100,

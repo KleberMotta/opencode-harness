@@ -6,7 +6,7 @@
     },
     "context-mode": {
       "type": "local",
-      "command": ["npx", "-y", "context-mode@latest"]
+      "command": ["context-mode"]
     },
     "exa": {
       "type": "remote",
@@ -16,7 +16,7 @@
   },
   "agent": {
     "j.planner": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "write": "allow",
         "bash": "allow",
@@ -31,7 +31,7 @@
       }
     },
     "j.plan-reviewer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "task": "deny",
         "bash": "deny",
@@ -41,7 +41,7 @@
       }
     },
     "j.spec-writer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "bash": "deny",
         "write": "allow",
@@ -54,7 +54,7 @@
       }
     },
     "j.implementer": {
-      "model": "github-copilot/gpt-5.4",
+      "model": "github-copilot/claude-sonnet-4.6",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -68,7 +68,7 @@
       }
     },
     "j.validator": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -78,7 +78,7 @@
       }
     },
     "j.reviewer": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "bash": "deny",
         "write": "deny",
@@ -88,7 +88,7 @@
       }
     },
     "j.checker": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -101,7 +101,7 @@
       }
     },
     "j.unify": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -131,7 +131,7 @@
       }
     },
     "j.plan": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "task": {
           "*": "deny",
@@ -144,7 +144,7 @@
       }
     },
     "j.spec": {
-      "model": "github-copilot/claude-opus-4.7",
+      "model": "github-copilot/claude-opus-4.6",
       "permission": {
         "task": {
           "*": "deny",
@@ -157,6 +157,7 @@
       }
     }
   },
+  "plugin": ["context-mode"],
   "$schema": "https://opencode.ai/config.json",
   "provider": {
     "github-copilot": {
