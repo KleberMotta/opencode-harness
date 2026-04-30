@@ -51,6 +51,20 @@ case "$STACK" in
       node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); process.exit(pkg.scripts && pkg.scripts[process.argv[1]] ? 0 : 1)" "$1" >/dev/null 2>&1
     }
 
+    # Check if eslint is actually configured (config file exists).
+    has_eslint_config() {
+      for __ec_f in eslint.config.js eslint.config.mjs eslint.config.cjs .eslintrc .eslintrc.js .eslintrc.json .eslintrc.yml .eslintrc.yaml; do
+        if [ -f "$__ec_f" ]; then
+          unset __ec_f
+          return 0
+        fi
+      done
+      unset __ec_f
+      # Also check package.json for "eslintConfig" key
+      [ -f package.json ] && node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')); process.exit(p.eslintConfig ? 0 : 1)" >/dev/null 2>&1 && return 0
+      return 1
+    }
+
     if has_package_script "lint:structure"; then
       echo "[juninho:lint-structure] Stack: node — running npm run lint:structure"
       npm run lint:structure -- $FILES
@@ -63,14 +77,13 @@ case "$STACK" in
       exit 0
     fi
 
-    if command -v npx >/dev/null 2>&1 && npx --no-install eslint --version >/dev/null 2>&1; then
+    if has_eslint_config && command -v npx >/dev/null 2>&1 && npx --no-install eslint --version >/dev/null 2>&1; then
       echo "[juninho:lint-structure] Stack: node — running npx eslint"
       npx --no-install eslint --max-warnings=0 $FILES
       exit 0
     fi
 
-    echo "[juninho:lint-structure] Stack: node — no structure lint configured."
-    echo "[juninho:lint-structure] Customize .opencode/scripts/lint-structure.sh or run /j.finish-setup."
+    echo "[juninho:lint-structure] Stack: node — no linter configured (no eslint config, no lint script). Skipping."
     exit 0
     ;;
   unknown|*)
