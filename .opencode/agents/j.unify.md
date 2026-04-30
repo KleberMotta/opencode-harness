@@ -16,13 +16,13 @@ If a step is disabled there, skip it and report that it was intentionally skippe
 
 ### Step 1 — Reconcile Plan vs Delivery
 
-For each target project in the active plan, read `docs/specs/{feature-slug}/CONTEXT.md` and `docs/specs/{feature-slug}/plan.md`, then compare against that project's `git diff main...HEAD`.
+For each target project in the active plan, read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md` and `$WORKSPACE_ROOT/docs/specs/{feature-slug}/plan.md`, then compare against that project's `git diff main...HEAD`.
 
 For each task:
 - Mark as **DONE** (fully delivered), **PARTIAL** (partially delivered), or **SKIPPED** (not delivered)
 - For PARTIAL/SKIPPED: document why and create follow-up tasks in a new plan or issue
 
-Also read all per-task state files from each target's `$REPO_ROOT/docs/specs/{feature-slug}/state/`:
+Also read all per-task state files from `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/`:
 - `tasks/task-*/execution-state.md` — verify task completion status
 - `tasks/task-*/validator-work.md` — check validation verdicts
 - `implementer-work.md` — review decisions and deviations
@@ -31,10 +31,10 @@ Also read all per-task state files from each target's `$REPO_ROOT/docs/specs/{fe
 ### Step 2 — Reconcile Persistent Context (Non-Mutating)
 
 Read `.opencode/state/persistent-context.md`.
-Read `docs/specs/{feature-slug}/CONTEXT.md` — extract durable decisions and research findings that should survive feature closeout.
-Read `docs/specs/{feature-slug}/state/implementer-work.md` — extract decisions, deviations from plan, and blockers resolved.
-Read all `docs/specs/{feature-slug}/state/tasks/task-*/validator-work.md` — extract NOTE-tier deferred items and FIX-tier changes.
-Read `docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists — prefer it as the source of human-facing validation steps.
+Read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md` — extract durable decisions and research findings that should survive feature closeout.
+Read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/implementer-work.md` — extract decisions, deviations from plan, and blockers resolved.
+Read all `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/tasks/task-*/validator-work.md` — extract NOTE-tier deferred items and FIX-tier changes.
+Read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists — prefer it as the source of human-facing validation steps.
 
 Propose updates to `persistent-context.md` decisions that should be remembered long-term:
 - Architectural choices and their rationale
@@ -60,7 +60,7 @@ Do not create a final delivery commit for this summary.
 For each write target (`$REPO_ROOT`):
 
 Determine the validation source:
-- If `$REPO_ROOT/docs/specs/{feature-slug}/spec.md` exists, read it and `CONTEXT.md` along with that repo's `git diff main...HEAD`
+- Read the unified `$WORKSPACE_ROOT/docs/specs/{feature-slug}/spec.md` and `CONTEXT.md` along with that repo's `git diff main...HEAD`
 - If no spec exists, use the plan goal and task Done Criteria for context
 
 Identify which business domains were affected.
@@ -141,7 +141,7 @@ Acceptance example: with only `docs/domain/foo.md` changed during closeout, `/j.
 Code must already be committed into the canonical feature branch `feature/{feature-slug}` before UNIFY starts.
 UNIFY must NOT perform first-time code integration or merge arbitrary branches.
 
-For each write target (`$REPO_ROOT`), read `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json` and treat it as the only source of truth for task commit bookkeeping and cleanup.
+For each write target (`$REPO_ROOT`), read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json` and treat it as the only source of truth for task commit bookkeeping and cleanup.
 
 If cleanup is enabled (run via the Bash tool with `workdir="$REPO_ROOT"`):
 ```bash

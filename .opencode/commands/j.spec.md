@@ -26,9 +26,9 @@ Invoke the `@j.spec-writer` agent to create a detailed spec before implementatio
    - Data: schema and migration strategy
    - Review: **presents spec for your explicit approval**
 3. Classifies repositories into **write targets** (repos with code changes) and **reference projects** (read-only context)
-4. Writes spec to each write target project's `$REPO_ROOT/docs/specs/{feature-slug}/spec.md` (only after your approval)
-5. Writes a required `$REPO_ROOT/docs/specs/{feature-slug}/CONTEXT.md` with durable explorer findings, business vocabulary, identifier mappings, existing patterns, integration contracts, constraints, decisions, anti-patterns, and key files
-6. Never creates `docs/specs/` artifacts in reference projects unless explicitly stated
+4. Writes a unified spec to `$WORKSPACE_ROOT/docs/specs/{feature-slug}/spec.md` (only after your approval)
+5. Writes a required `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md` with durable explorer findings, business vocabulary, identifier mappings, existing patterns, integration contracts, constraints, decisions, anti-patterns, and key files
+6. Never creates `docs/specs/` artifacts in reference projects or target repos (unless `replicateSpecToTargetRepos` is true)
 
 The session does NOT need to call `@j.explore` separately — `@j.spec-writer` handles its own research internally.
 

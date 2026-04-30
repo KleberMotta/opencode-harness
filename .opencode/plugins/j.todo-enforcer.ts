@@ -1,9 +1,9 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { existsSync, readFileSync, readdirSync } from "fs"
 import path from "path"
-import { featureStateTaskDir } from "./j.feature-state-paths"
-import { resolveStateFile } from "./j.state-paths"
-import { loadActivePlanTargets } from "./j.workspace-paths"
+import { featureStateDir, featureStateTaskDir } from "../lib/j.feature-state-paths"
+import { resolveStateFile } from "../lib/j.state-paths"
+import { loadActivePlanTargets } from "../lib/j.workspace-paths"
 
 // Re-injects incomplete tasks to prevent the agent from forgetting pending work.
 // Three sources of truth (checked in order):
@@ -77,8 +77,9 @@ function slugFromPlanPath(planPath: string | undefined): string | null {
   return match?.[1] ?? null
 }
 
-function getPerTaskIncompleteForTarget(projectRoot: string, slug: string, projectLabel?: string): string[] {
-  const tasksDir = path.join(projectRoot, "docs", "specs", slug, "state", "tasks")
+function getPerTaskIncompleteForTarget(directory: string, slug: string, projectLabel?: string): string[] {
+  // Task state lives in workspace root (directory), not in target repos
+  const tasksDir = path.join(featureStateDir(directory, slug), "tasks")
   if (!existsSync(tasksDir)) return []
 
   const tasks: string[] = []
@@ -86,7 +87,7 @@ function getPerTaskIncompleteForTarget(projectRoot: string, slug: string, projec
     const taskDirs = readdirSync(tasksDir).filter((f) => f.startsWith("task-"))
     for (const taskDirName of taskDirs) {
       const taskID = taskDirName.replace(/^task-/, "")
-      const taskDir = featureStateTaskDir(projectRoot, slug, taskID)
+      const taskDir = featureStateTaskDir(directory, slug, taskID)
       const summary = parseTaskState(path.join(taskDir, "execution-state.md"), projectLabel)
       if (summary) tasks.push(summary)
     }
@@ -101,19 +102,18 @@ function getIncompleteTasks(directory: string): string[] {
   const globalTasks = getIncompleteFromFile(globalPath)
 
   const perTaskTasks: string[] = []
-  const visited = new Set<string>()
 
-  // Multi-target: iterate active-plan write targets and read tasks per project root.
+  // Multi-target: iterate active-plan write targets and read tasks from workspace.
+  // Task state is centralized in the workspace, not per-target.
   const activeTargets = loadActivePlanTargets(directory)
+  const visitedSlugs = new Set<string>()
   for (const target of activeTargets) {
-    const projectRoot = target.targetRepoRoot
     const slug = target.slug ?? slugFromPlanPath(target.planPath) ?? undefined
-    if (!projectRoot || !slug) continue
-    const key = projectRoot + "::" + slug
-    if (visited.has(key)) continue
-    visited.add(key)
-    const projectLabel = target.project ?? path.basename(projectRoot)
-    perTaskTasks.push(...getPerTaskIncompleteForTarget(projectRoot, slug, projectLabel))
+    if (!slug) continue
+    if (visitedSlugs.has(slug)) continue
+    visitedSlugs.add(slug)
+    const projectLabel = target.project ?? (target.targetRepoRoot ? path.basename(target.targetRepoRoot) : undefined)
+    perTaskTasks.push(...getPerTaskIncompleteForTarget(directory, slug, projectLabel))
   }
 
   // Fallback: workspace-local layout when no active plan targets.

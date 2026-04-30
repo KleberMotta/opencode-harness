@@ -27,6 +27,9 @@ type ActivePlanReferenceProject = {
 
 type ActivePlanState = {
   slug?: string
+  planPath?: string
+  specPath?: string
+  contextPath?: string
   writeTargets?: ActivePlanTarget[]
   targets?: ActivePlanTarget[]
   referenceProjects?: ActivePlanReferenceProject[]
@@ -229,7 +232,7 @@ export function resolveProjectPaths(workspaceRoot: string, hints: ProjectHints =
     projectRoot,
     stateRoot: path.join(workspaceRoot, ".opencode", "state"),
     docsRoot: path.join(projectRoot, "docs"),
-    specsRoot: path.join(projectRoot, "docs", "specs"),
+    specsRoot: path.join(workspaceRoot, "docs", "specs"),
     principlesRoot: path.join(projectRoot, "docs", "principles"),
     domainRoot: path.join(projectRoot, "docs", "domain"),
     projectLabel: normalizePath(path.relative(workspaceRoot, projectRoot)) || ".",
@@ -322,6 +325,11 @@ export function normalizeActivePlanTargets(workspaceRoot: string, state: ActiveP
       ? state.targets
       : []
 
+  // Top-level spec paths from the new centralized structure (workspace-relative)
+  const topLevelPlanPath = state.planPath
+  const topLevelSpecPath = state.specPath
+  const topLevelContextPath = state.contextPath
+
   return directTargets
     .map((target) => {
       const targetRepoRoot = target.targetRepoRoot?.trim() || resolveTargetProjectRoot(workspaceRoot, {
@@ -333,6 +341,11 @@ export function normalizeActivePlanTargets(workspaceRoot: string, state: ActiveP
 
       return {
         ...target,
+        // Inherit top-level paths when per-target paths are missing (new centralized structure)
+        planPath: target.planPath || topLevelPlanPath,
+        specPath: target.specPath || topLevelSpecPath,
+        contextPath: target.contextPath || topLevelContextPath,
+        slug: target.slug || state.slug,
         targetRepoRoot,
       }
     })

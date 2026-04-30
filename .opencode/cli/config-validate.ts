@@ -59,6 +59,7 @@ const ALLOWED_DOCUMENTATION = new Set([
   "preferDomainDocsForBusinessBehavior",
   "preferPrincipleDocsForCrossCuttingTech",
   "syncMarkers",
+  "replicateSpecToTargetRepos",
 ])
 
 function unknownKeys(obj: Record<string, any>, allowed: Set<string>, scope: string): string[] {

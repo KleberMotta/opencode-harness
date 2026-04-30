@@ -15,13 +15,13 @@ You read the spec FIRST, then the full `CONTEXT.md`, before reading any code. Th
 
 Read in this order:
 1. Determine the task's target project root (`$REPO_ROOT`) from the task contract's absolute `targetRepoRoot`, or from the caller's prompt context
-2. Read the absolute `specPath` from the caller when present; otherwise use `$REPO_ROOT/docs/specs/{feature-slug}/spec.md`
-3. Read the absolute `contextPath` from the caller when present; otherwise use `$REPO_ROOT/docs/specs/{feature-slug}/CONTEXT.md`. If a spec/plan exists but `CONTEXT.md` is missing, classify as BLOCK.
-4. Read the absolute `planPath` from the caller; otherwise use `$REPO_ROOT/docs/specs/{feature-slug}/plan.md`
+2. Read the absolute `specPath` from the caller when present; otherwise resolve from workspace: `$WORKSPACE_ROOT/docs/specs/{feature-slug}/spec.md`
+3. Read the absolute `contextPath` from the caller when present; otherwise resolve from workspace: `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md`. If a spec/plan exists but `CONTEXT.md` is missing, classify as BLOCK.
+4. Read the absolute `planPath` from the caller; otherwise resolve from workspace: `$WORKSPACE_ROOT/docs/specs/{feature-slug}/plan.md`
 5. Read the implementation for the exact task under validation using exact commit, git diff, or absolute changed-file paths supplied by the caller
 
 If no spec exists, validate against the plan's task done criteria. Use each task's `### Done Criteria`.
-When the active plan spans multiple target projects, validate only against the artifact paths for the current task's `$REPO_ROOT`.
+Spec artifacts live centralized in the workspace root, not per target repo. Validate task criteria relevant to the current `$REPO_ROOT` in the unified plan/spec.
 If neither exists, request clarification before proceeding.
 
 ### Step 2 — Evaluate Each Criterion

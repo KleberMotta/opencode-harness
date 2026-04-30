@@ -12,11 +12,11 @@ Invoke the `@j.unify` agent to reconcile plan vs delivery and execute only the e
 
 1. Read `juninho-config.json` (`workflow` section)
 2. Read `.opencode/state/active-plan.json` to discover all write targets
-3. For each write target (`$REPO_ROOT`), reconcile `$REPO_ROOT/docs/specs/{feature-slug}/plan.md` vs actual git diff — mark tasks DONE/PARTIAL/SKIPPED
-4. Run only the enabled closeout steps per target, such as:
+3. Reconcile the unified `$WORKSPACE_ROOT/docs/specs/{feature-slug}/plan.md` vs actual git diff per target — mark tasks DONE/PARTIAL/SKIPPED
+4. Run only the enabled closeout steps, such as:
    - reconcile `persistent-context.md`
-   - reconcile `$REPO_ROOT/docs/domain/` or `$REPO_ROOT/docs/domain/INDEX.md`
-   - cleanup integration bookkeeping using `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
+   - reconcile `$REPO_ROOT/docs/domain/` or `$REPO_ROOT/docs/domain/INDEX.md` per target
+   - cleanup integration bookkeeping using `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
    - create a PR (per target repo when applicable)
 4. If PR creation is enabled, draft a rich PR body with purpose, problem, solution, changed files, and validation steps
 5. Treat forward-only follow-up tasks created after `/j.check` as first-class delivery units when reconciling plan vs delivery

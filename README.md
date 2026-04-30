@@ -143,18 +143,24 @@ Delega para `@j.planner`, que orquestra internamente:
 
 #### Multi-projeto
 
-O `active-plan.json` separa:
-- **`writeTargets`**: repos onde código será modificado.
+O `active-plan.json` centraliza os paths dos artefatos de spec no workspace root:
+- **`planPath`/`specPath`/`contextPath`**: paths relativos ao workspace root (ex.: `docs/specs/{slug}/plan.md`)
+- **`writeTargets`**: repos onde código será modificado (apenas `project` + `targetRepoRoot`).
 - **`referenceProjects`**: repos lidos apenas para contexto/referência.
+
+Um único `plan.md` unificado contém todas as tasks de todos os repos; não há duplicação per-target.
 
 Exemplo real (`seller-creation-service`):
 
 ```json
 {
   "slug": "seller-creation-service",
+  "planPath": "docs/specs/seller-creation-service/plan.md",
+  "specPath": "docs/specs/seller-creation-service/spec.md",
+  "contextPath": "docs/specs/seller-creation-service/CONTEXT.md",
   "writeTargets": [
-    { "project": "olxbr/trp-seller-api", "targetRepoRoot": "...", "planPath": "docs/specs/.../plan.md" },
-    { "project": "olxbr/trp-infra",      "targetRepoRoot": "...", "planPath": "docs/specs/.../plan.md" }
+    { "project": "olxbr/trp-seller-api", "targetRepoRoot": "/Users/.../trp-seller-api" },
+    { "project": "olxbr/trp-infra",      "targetRepoRoot": "/Users/.../trp-infra" }
   ],
   "referenceProjects": [
     { "project": "olxbr/trp-partner-api",   "reason": "Contrato de criação de seller; somente leitura." },
@@ -467,6 +473,7 @@ Próxima sessão do opencode já usa o modelo novo.
 | `preferDomainDocsForBusinessBehavior` | `true` | Comportamento de negócio em `docs/domain/`, com sync markers |
 | `preferPrincipleDocsForCrossCuttingTech` | `true` | Regras técnicas transversais em `docs/principles/` |
 | `syncMarkers` | `true` | Usa `<!-- juninho:sync source=… hash=… -->` para detectar drift doc↔código |
+| `replicateSpecToTargetRepos` | `false` | Em `true`, copia `spec.md`/`plan.md`/`CONTEXT.md` para `docs/specs/{slug}/` dentro de cada write target |
 
 ### 5.7 Configuração ativa
 
@@ -500,7 +507,8 @@ Próxima sessão do opencode já usa o modelo novo.
       "preferAgentsMdForLocalRules": true,
       "preferDomainDocsForBusinessBehavior": true,
       "preferPrincipleDocsForCrossCuttingTech": true,
-      "syncMarkers": true
+      "syncMarkers": true,
+      "replicateSpecToTargetRepos": false
     }
   }
 }
@@ -656,11 +664,11 @@ Em `juninho-config.json`:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `active-plan.json` | Ponteiro para o plano ativo (slug, writeTargets, referenceProjects) |
+| `active-plan.json` | Ponteiro para o plano ativo (slug, planPath, specPath, contextPath, writeTargets, referenceProjects) |
 | `execution-state.md` | Resumo de sessão global (objetivo ativo, plano, log de sessão) |
 | `persistent-context.md` | Memória de longo prazo do projeto (atualizada pelo UNIFY) |
 
-### 10.2 Estado por feature (`docs/specs/{slug}/state/`, versionado dentro de cada projeto)
+### 10.2 Estado por feature (`docs/specs/{slug}/state/`, versionado no **workspace root**)
 
 | Arquivo | Conteúdo |
 |---|---|
@@ -689,7 +697,7 @@ Cada child session começa **limpa**. O orchestrator não acumula 200KB de leitu
 `spec.md` + `CONTEXT.md` viram contratos verificáveis. O `@j.validator` valida cada task **contra a spec**, não contra "achismo". Code review (`@j.reviewer`) é multi-pass com critérios explícitos.
 
 ### 11.4 Multi-projeto nativo
-Um único plano pode abranger N repositórios (write targets) + M referências. O harness mantém estado isolado por projeto, branches consistentes (`feature/{slug}` em cada repo), e cleanups coordenados.
+Um único plano unificado (`docs/specs/{slug}/plan.md` no workspace root) pode abranger N repositórios (write targets) + M referências. O estado de toda a feature vive centralizado em `docs/specs/{slug}/state/` no workspace — branches consistentes (`feature/{slug}` em cada repo), e cleanups coordenados.
 
 ### 11.5 Forward-only history
 Tasks `COMPLETE` nunca são reabertas — correções viram follow-up tasks. Histórico git fica linear, auditável, e cada commit tem contexto rastreável até a spec original.
@@ -778,8 +786,8 @@ Toda Read tagga linhas com `NNN#XX:` (hash MD5 truncado da linha). Toda Edit val
 
 ## 14. Convenções
 
-- **Specs:** `docs/specs/{feature-slug}/{spec.md, CONTEXT.md, plan.md, state/**}`
-- **Domain docs:** `docs/domain/{domain}/*.md`, indexados em `docs/domain/INDEX.md`
+- **Specs:** `docs/specs/{feature-slug}/{spec.md, CONTEXT.md, plan.md, state/**}` — sempre no **workspace root**, nunca nos target repos (a menos que `replicateSpecToTargetRepos: true`)
+- **Domain docs:** `docs/domain/{domain}/*.md`, indexados em `docs/domain/INDEX.md` — permanecem em cada target repo
 - **Principles:** `docs/principles/{topic}.md`, registrados em `docs/principles/manifest`
 - **Sync markers:** `<!-- juninho:sync source=… hash=… -->` para detectar drift doc↔código
 - **Branch:** sempre `feature/{slug}` para todo o ciclo de vida de uma feature (do primeiro commit ao PR)

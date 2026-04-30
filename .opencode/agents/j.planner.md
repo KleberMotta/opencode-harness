@@ -186,10 +186,9 @@ financial-api is a `writeTarget` — not a footnote in the partner-api plan.
 
 ### 2.4 Write plan.md
 
-Write to each write target project's `docs/specs/{feature-slug}/plan.md`.
-Each project's plan must contain only the tasks that belong to that project.
-Do not duplicate the full multi-repo task list into every repo.
-Reference projects used only for contract or dependency research must not receive `plan.md` or `CONTEXT.md` artifacts unless the developer explicitly promotes them to write targets.
+Write a single unified `docs/specs/{feature-slug}/plan.md` in the workspace root.
+The plan contains ALL tasks for ALL write targets, organized by waves. Each task includes a `Target:` field identifying which repo it belongs to.
+Reference projects used only for contract or dependency research must not receive any spec artifacts unless the developer explicitly promotes them to write targets.
 
 Use Markdown as the canonical human-readable artifact. All plans MUST use this Markdown contract and remain saved as `plan.md`. Do not switch to YAML by default: long multiline implementation instructions, code references, and human review comments are more readable in Markdown, while headings/lists are stable enough for agents and simple parsers.
 
@@ -329,11 +328,12 @@ The only exception is the explicit automation override above, enabled through `j
 ### 3.4 Signal readiness
 
 Write `.opencode/state/active-plan.json`.
-For single-project plans, the previous flat contract is acceptable.
-For multi-project plans, use absolute paths for every artifact path:
-`{"slug":"{feature-slug}","writeTargets":[{"project":"{project-label}","targetRepoRoot":"{absolute target repo root}","planPath":"{absolute target repo root}/docs/specs/{feature-slug}/plan.md","specPath":"{absolute target repo root}/docs/specs/{feature-slug}/spec.md","contextPath":"{absolute target repo root}/docs/specs/{feature-slug}/CONTEXT.md"}],"referenceProjects":[{"project":"{project-label}","targetRepoRoot":"{absolute target repo root}","reason":"contract or context only"}]}`
-Do not write relative `docs/specs/...` paths into `active-plan.json`; downstream implementer subagents require absolute file paths.
-Only `writeTargets` receive plan/spec/context artifacts. `referenceProjects` are read-only context for downstream tools and summaries.
+Spec artifacts (plan.md, spec.md, CONTEXT.md) now live centralized in the workspace root.
+The active-plan.json stores paths relative to the workspace root for spec artifacts:
+`{"slug":"{feature-slug}","planPath":"docs/specs/{feature-slug}/plan.md","specPath":"docs/specs/{feature-slug}/spec.md","contextPath":"docs/specs/{feature-slug}/CONTEXT.md","writeTargets":[{"project":"{project-label}","targetRepoRoot":"{absolute target repo root}"}],"referenceProjects":[{"project":"{project-label}","targetRepoRoot":"{absolute target repo root}","reason":"contract or context only"}]}`
+Paths `planPath`, `specPath`, `contextPath` are relative to the workspace root. Downstream commands resolve them to absolute paths using `$WORKSPACE_ROOT/{path}`.
+`writeTargets` entries only contain `project` and `targetRepoRoot` — they no longer carry per-target plan/spec/context paths because a single unified plan.md covers all targets.
+Only `writeTargets` receive implementation commits. `referenceProjects` are read-only context for downstream tools and summaries.
 
 Report to developer:
 "Plan approved. Run `/j.implement` to execute, or `/j.spec` first if you want a formal spec."
@@ -342,11 +342,11 @@ Report to developer:
 
 ## Output Contract
 
-- Always read and enrich `docs/specs/{feature-slug}/CONTEXT.md` before the plan in every write target project
-- Always write `docs/specs/{feature-slug}/plan.md` before concluding in every write target project
+- Always read and enrich `docs/specs/{feature-slug}/CONTEXT.md` (in workspace root) before the plan
+- Always write a single unified `docs/specs/{feature-slug}/plan.md` (in workspace root) covering all write targets
 - **Always get explicit developer approval via `question` tool before writing `.opencode/state/active-plan.json`, unless eval automation mode explicitly auto-approves artifacts**
 - Always write `.opencode/state/active-plan.json` after developer approval
 - Never start implementing — planning only
-- Create `docs/specs/{feature-slug}/` directory if it doesn't exist
-- Ensure `docs/specs/{feature-slug}/state/`, `state/tasks/`, and `state/sessions/` exist
+- Create `docs/specs/{feature-slug}/` directory in workspace root if it doesn't exist
+- Ensure `docs/specs/{feature-slug}/state/`, `state/tasks/`, and `state/sessions/` exist in workspace root
 - Ensure `docs/specs/{feature-slug}/state/README.md` exists from `.opencode/templates/spec-state-readme.md`

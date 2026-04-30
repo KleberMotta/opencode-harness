@@ -30,7 +30,7 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
 6. Creates or switches to a single canonical plan branch `feature/{feature-slug}` for the entire run.
 6. Delegates each implementation task to its own task-scoped `@j.implementer` subagent so every task starts with a fresh context window.
 7. Because all commits land on the same plan branch, task workers commit sequentially even when the plan has multiple tasks in the same wave.
-8. Each task writes its own execution lease in `docs/specs/{feature-slug}/state/tasks/task-{id}/execution-state.md`; periodic heartbeat-only rewrites happen only when `workflow.implement.refreshExecutionHeartbeat` is enabled.
+8. Each task writes its own execution lease in `docs/specs/{feature-slug}/state/tasks/task-{id}/execution-state.md` (in the workspace root); periodic heartbeat-only rewrites happen only when `workflow.implement.refreshExecutionHeartbeat` is enabled.
 9. If `workflow.implement.watchdogSessionStale` is enabled and a spawned task never writes state or goes stale, the watchdog/orchestrator may launch one retry attempt for that task. When heartbeat refresh is disabled, stale detection uses runtime/session activity instead of rewriting the task state file.
 10. Uses the fast pre-commit path while implementing:
     - `.opencode/scripts/lint-structure.sh`
@@ -38,12 +38,12 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
     - `.opencode/scripts/test-related.sh`
     - focused test execution is routed through `.opencode/scripts/run-test-scope.sh`
 11. Spawns `@j.validator` after each task commit to validate the just-implemented task against spec/plan intent, QA expectations, and code quality expectations within task scope.
-12. Task state, validator state, implementer log, retry budget, and runtime metadata all live under `docs/specs/{feature-slug}/state/` in each task's target project repo root. Multi-project runs must keep state isolated per write target.
-13. Canonical task commit bookkeeping is tracked in `docs/specs/{feature-slug}/state/integration-state.json`.
+12. Task state, validator state, implementer log, retry budget, and runtime metadata all live under `docs/specs/{feature-slug}/state/` in the **workspace root** (not in each target project). State is centralized regardless of write target count.
+13. Canonical task commit bookkeeping is tracked in `docs/specs/{feature-slug}/state/integration-state.json` (workspace root).
 14. A task is only marked COMPLETE after its single implementation commit succeeds, validator approval is written, and the task bookkeeping for that commit is recorded successfully.
 15. The task commit must contain code/config deliverables only; do not create a second commit for state artifacts during implementation.
 16. If `workflow.implement.watchdogSessionStale` is enabled, watchdog notifications may surface stalled sessions, but notifications never block the run.
-17. Before final exit on a successful whole-feature run, request a feature-level validator pass for each write target to write that target project's `docs/specs/{feature-slug}/state/functional-validation-plan.md`.
+17. Before final exit on a successful whole-feature run, request a feature-level validator pass to write `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md`.
 18. Exit only when code changes, task-level tests, and target-local functional validation plans are complete for every write target on `feature/{feature-slug}`.
 19. The caller then runs `.opencode/scripts/check-all.sh` or `/j.check`, which validate the canonical plan branch using `check-review.md` plus `functional-validation-plan.md`.
 20. If the repo-wide check fails, delegate back to `@j.implementer` with the failing output and those generated artifacts.

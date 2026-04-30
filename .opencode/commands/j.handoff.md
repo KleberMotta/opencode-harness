@@ -11,11 +11,11 @@ Prepare a handoff document for the next session or team member.
 ## What happens
 
 1. Reads `.opencode/state/active-plan.json` to discover all write targets
-2. For each write target project (`$REPO_ROOT`):
-   - Reads per-task state from `$REPO_ROOT/docs/specs/{feature-slug}/state/tasks/task-*/execution-state.md`
-   - Reads the feature-local implementer log from `$REPO_ROOT/docs/specs/{feature-slug}/state/implementer-work.md`
-   - Reads `$REPO_ROOT/docs/specs/{feature-slug}/state/integration-state.json` for validated SHAs and commit bookkeeping/cleanup status
-   - Reads session runtime metadata from `$REPO_ROOT/docs/specs/{feature-slug}/state/sessions/` when session ownership/context is relevant
+2. Reads centralized feature state from the workspace root:
+   - Reads per-task state from `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/tasks/task-*/execution-state.md`
+   - Reads the feature-local implementer log from `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/implementer-work.md`
+   - Reads `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json` for validated SHAs and commit bookkeeping/cleanup status
+   - Reads session runtime metadata from `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/sessions/` when session ownership/context is relevant
 3. Summarizes (across all write targets):
    - What was completed this session
    - What is in progress (with file names, attempt number, and last heartbeat)

@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-. "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/_resolve-repo.sh"
-ROOT_DIR="$TARGET_REPO_ROOT"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+WORKSPACE_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 
 FEATURE_SLUG="${1:-}"
 
@@ -11,8 +11,9 @@ FEATURE_SLUG="${1:-}"
   exit 1
 }
 
-STATE_DIR="$ROOT_DIR/docs/specs/$FEATURE_SLUG/state"
-# Templates always live in the workspace harness, never inside the target repo.
+# State directories live in the workspace root, not in target repos
+STATE_DIR="$WORKSPACE_ROOT/docs/specs/$FEATURE_SLUG/state"
+# Templates always live in the workspace harness
 TEMPLATE_PATH="$WORKSPACE_ROOT/.opencode/templates/spec-state-readme.md"
 
 mkdir -p "$STATE_DIR/tasks" "$STATE_DIR/sessions"

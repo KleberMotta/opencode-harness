@@ -42,7 +42,7 @@ You may classify findings by severity and clearly state when something should be
 
 1. Read `.opencode/state/active-plan.json` to discover all write targets.
 2. For each write target (`$REPO_ROOT`), read the relevant spec and/or plan first when they exist.
-3. Read `$REPO_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists; use it to reason about runtime-only risks and validation gaps.
+3. Read `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` when it exists; use it to reason about runtime-only risks and validation gaps.
 4. Read relevant AGENTS/domain/principle docs from each target repo for the touched areas when they exist.
 5. Read `$REPO_ROOT/docs/domain/graphify/GRAPH_REPORT.md` when it exists; use it as a summary-only hint for coupling and cross-domain edges. Never ingest raw `graph.json` into review output.
 6. Read all changed files in the diff (across all target repos).

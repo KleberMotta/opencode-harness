@@ -9,8 +9,16 @@ Your scope ends when the planned code changes, task-level tests, and any previou
 
 ## Canonical Repo Root
 
-All feature docs must be read from and written to the target project repository root.
-Global harness state stays in the workspace harness root.
+All feature spec artifacts (spec.md, plan.md, CONTEXT.md) and implementation state live in the **workspace root**, not in each target repo:
+
+```bash
+WORKSPACE_ROOT="/Users/kleber.motta/repos"
+SPEC_ROOT="$WORKSPACE_ROOT/docs/specs/{feature-slug}"
+STATE_ROOT="$WORKSPACE_ROOT/docs/specs/{feature-slug}/state"
+```
+
+Target repos receive only code/config changes. Their `docs/` retain domain docs and principles only.
+Global harness state stays in `.opencode/state/`.
 
 Use:
 
@@ -18,7 +26,7 @@ Use:
 REPO_ROOT="{target project repository root from active-plan.json or explicit task contract}"
 ```
 
-All task contracts should provide absolute paths. If a contract or `active-plan.json` still contains a relative `docs/specs/...` path, normalize it to `$REPO_ROOT/{relative-path}` before reading, writing, passing to validators, or recording state.
+All task contracts should provide absolute paths. If a contract or `active-plan.json` still contains a relative `docs/specs/...` path, normalize it to `$WORKSPACE_ROOT/{relative-path}` before reading, writing, passing to validators, or recording state.
 All `.opencode/state/` paths below refer to the workspace harness state, not the target project's `.opencode/` directory.
 
 For multi-project plans:
@@ -65,7 +73,7 @@ Hard rules:
    - read that target project's absolute `planPath`
    - read that target project's absolute `specPath` if it exists
    - read that target project's absolute `contextPath` fully; if it is missing for a planned feature, stop and report a plan/context defect
-   - read absolute state paths under `{targetRepoRoot}/docs/specs/{feature-slug}/state/`, including `implementer-work.md`, `check-review.md`, `check-all-output.txt`, `functional-validation-plan.md`, and `integration-state.json` when they exist
+   - read absolute state paths under `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/`, including `implementer-work.md`, `check-review.md`, `check-all-output.txt`, `functional-validation-plan.md`, and `integration-state.json` when they exist
    - use those target-local artifacts to detect COMPLETE tasks and skip already-finished work on rerun
 6. If you are executing a single task, read only that task target's artifacts and dependency state. Use `targetProject`, `targetRepoRoot`, `planPath`, `specPath`, `contextPath`, and state paths from the prompt contract; do not infer a different repo from task id alone. Treat these paths as absolute and normalize any relative path against `targetRepoRoot` before use. Read `contextPath` fully before task files; if it is missing for a planned feature, stop and report a plan/context defect.
 7. For target-local review findings:
@@ -87,7 +95,7 @@ Hard rules:
 12. Ensure state directories exist:
 
 ```bash
-mkdir -p "$REPO_ROOT/docs/specs/{feature-slug}/state/tasks" "$REPO_ROOT/docs/specs/{feature-slug}/state/sessions"
+mkdir -p "$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/tasks" "$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/sessions"
 ```
 
 If `spec.md` does not exist, validation falls back to the `plan.md` goal and task done criteria. Use `- **Goal**:` and each task's `### Done Criteria`. `CONTEXT.md` is required for active Juninho plans; missing context is a planning defect.
@@ -101,7 +109,7 @@ When invoked with no specific file/task target, treat the whole `plan.md` as the
 
 ## Task Ownership, Heartbeats, and Retry Safety
 
-Each task uses `docs/specs/{feature-slug}/state/tasks/task-{id}/execution-state.md` as its lease file.
+Each task uses `docs/specs/{feature-slug}/state/tasks/task-{id}/execution-state.md` as its lease file (under `$WORKSPACE_ROOT`).
 Automatic retry budget lives in `retry-state.json`.
 Structured runtime metadata for watchdog/orchestration lives in:
 
@@ -111,6 +119,8 @@ Structured runtime metadata for watchdog/orchestration lives in:
 Canonical commit bookkeeping lives in:
 
 - `docs/specs/{feature-slug}/state/integration-state.json`
+
+All these paths are relative to `$WORKSPACE_ROOT`, not `$REPO_ROOT`.
 
 Commit policy:
 
@@ -406,7 +416,7 @@ sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh sw
 3. Update `.opencode/state/execution-state.md` only as local session state if still used by the workflow.
 4. Exit cleanly and report:
    - task-level implementation is complete
-   - each write target's `docs/specs/{feature-slug}/state/functional-validation-plan.md` is ready for `/j.check`
+   - each write target's `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/functional-validation-plan.md` is ready for `/j.check`
    - the caller should run `sh /Users/kleber.motta/repos/.opencode/scripts/check-all.sh` (with `workdir="$REPO_ROOT"`) or `/j.check` from the canonical feature branch
    - if the repo-wide check fails, invoke `@j.implementer` again with the failing output
 
