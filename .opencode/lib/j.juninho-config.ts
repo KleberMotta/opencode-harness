@@ -9,9 +9,6 @@ export type ModelTiers = {
 }
 
 export type JuninhoConfig = {
-  projectType?: string
-  isKotlin?: boolean
-  buildTool?: string
   models?: ModelTiers
   workflow?: {
     automation?: {

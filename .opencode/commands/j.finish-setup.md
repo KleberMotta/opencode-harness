@@ -92,15 +92,27 @@ In this mode, `/j.finish-setup` must resolve the **target project root** before 
 16. Validate `.opencode/scripts/check-all.sh` (at harness root)
 17. Align commands documented in generated `AGENTS.md` files with the actual repository scripts and build tools found in `$PROJECT_ROOT`
 
+### Phase 6 — Install Pre-commit Hook
+
+18. Run `$WORKSPACE_ROOT/.opencode/scripts/install-target-hooks.sh --repo "$PROJECT_ROOT"` to:
+    - Detect the target repo stack via filesystem markers (maven/node/terraform)
+    - Generate `$PROJECT_ROOT/scripts/pre-commit.sh` (delegates to workspace harness scripts)
+    - Install symlink `$PROJECT_ROOT/.git/hooks/pre-commit → ../../scripts/pre-commit.sh`
+19. Verify the hook is executable and resolves correctly by running: `$PROJECT_ROOT/scripts/pre-commit.sh` (expect "No staged files" exit 0)
+20. Document the hook in the generated root `AGENTS.md` under "Core Commands":
+    ```
+    - `sh scripts/pre-commit.sh` — local pre-commit checks (lint + build + related tests); auto-installed by harness
+    ```
+
 ### Phase 7 — Bootstrap Graphify
 
-18. Read the harness `juninho-config.json` and inspect `workflow.graphify.enabled`
-19. If Graphify is disabled, record an intentional skip for this phase and do not run any build
-20. If Graphify is enabled, run `npm run graphify:build -- --repo "$PROJECT_ROOT"` from the harness root
-21. Document Graphify outputs in `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`
-22. If Graphify cache/output exceeds 100 MB, emit a warning and recommend Git LFS; do not migrate automatically
-23. Do not enable `--watch`, install git hooks, or add pre-commit automation as part of this phase
-24. Graphify integrates via CLI (`graphify query`, `graphify path`, `graphify explain`) and the official opencode skill/plugin — not as an MCP server.
+21. Read the harness `juninho-config.json` and inspect `workflow.graphify.enabled`
+22. If Graphify is disabled, record an intentional skip for this phase and do not run any build
+23. If Graphify is enabled, run `npm run graphify:build -- --repo "$PROJECT_ROOT"` from the harness root
+24. Document Graphify outputs in `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`
+25. If Graphify cache/output exceeds 100 MB, emit a warning and recommend Git LFS; do not migrate automatically
+26. Do not enable `--watch` or add CI automation as part of this phase
+27. Graphify integrates via CLI (`graphify query`, `graphify path`, `graphify explain`) and the official opencode skill/plugin — not as an MCP server.
 
 ## Delegation Rule (MANDATORY)
 

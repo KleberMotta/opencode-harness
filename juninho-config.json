@@ -1,5 +1,4 @@
 {
-  "projectType": "node-generic",
   "models": {
     "strong": "github-copilot/claude-opus-4.7",
     "medium": "github-copilot/gpt-5.4",

@@ -30,7 +30,7 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 │   ├── templates/          # templates para artefatos (spec, CONTEXT, plan…)
 │   ├── tools/              # custom tools (find_pattern, lsp_*, ast_grep_*, …)
 │   ├── evals/              # baterias de eval (structural, behavioral)
-│   └── hooks/              # hooks git instalados pelo finish-setup
+│   └── hooks/              # shim do hook do workspace (symlinked em .git/hooks/)
 ├── docs/                   # documentação versionada do workspace
 └── tmp/                    # rascunhos descartáveis (não versionado)
 ```
@@ -424,13 +424,17 @@ Próxima sessão do opencode já usa o modelo novo.
 
 > **Zero setup extra** — `bun install` é tudo. Sem env vars, sem direnv, sem wrappers.
 
-### 5.2 Project metadata
+### 5.2 Stack detection
 
-| Chave | Uso |
-|---|---|
-| `projectType` | Hint para scripts de check (`node-generic`, `kotlin`, `maven`, …) |
-| `isKotlin` | Atalho booleano usado em vários plugins |
-| `buildTool` | `npm` / `gradle` / `mvn` |
+O harness detecta a stack do projeto alvo automaticamente via filesystem markers (`_detect-stack.sh`):
+- `pom.xml` ou `mvnw` → **maven** (Java/Kotlin)
+- `*.tf` na raiz → **terraform**
+- `package.json` → **node**
+- Nenhum marker → **unknown** (skips gracefully)
+
+Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
+
+> **Nota:** O campo `projectType` foi removido do config. Nenhum script usa-o em runtime — a detecção é sempre por FS markers.
 
 ### 5.3 `workflow.automation`
 
@@ -482,7 +486,6 @@ Próxima sessão do opencode já usa o modelo novo.
   "strong":  "github-copilot/gpt-5.4",
   "medium":  "github-copilot/gpt-5.4",
   "weak":    "github-copilot/claude-haiku-4.5",
-  "projectType": "node-generic",
   "workflow": {
     "automation": { "nonInteractive": false, "autoApproveArtifacts": false },
     "implement":  {
@@ -515,6 +518,56 @@ Próxima sessão do opencode já usa o modelo novo.
 ```
 
 A configuração local **desativou** PR automation, doc updates, e watchdog/heartbeat — e **ativou** `singleTaskMode` — porque o workflow atual é supervisionado: o developer revisa cada task individualmente e os PRs são abertos manualmente.
+
+---
+
+## 5.8 Pre-commit hook
+
+### Arquitetura
+
+```
+TARGET REPO (ex: trp-seller-api/)
+├── scripts/
+│   └── pre-commit.sh          ← gerado por install-target-hooks.sh (stack-aware)
+└── .git/hooks/
+    └── pre-commit             ← symlink → ../../scripts/pre-commit.sh
+
+WORKSPACE (~/repos/)
+├── .opencode/scripts/
+│   ├── install-target-hooks.sh   ← gera + instala hook em qualquer target repo
+│   ├── pre-commit.sh             ← hook do próprio workspace
+│   ├── lint-structure.sh         ← lint stack-aware (chamado pelo hook)
+│   ├── build-verify.sh           ← build verification (chamado pelo hook)
+│   └── test-related.sh           ← testes de arquivos alterados (chamado pelo hook)
+└── .opencode/hooks/
+    └── pre-commit             ← shim do workspace (.git/hooks/ symlinked aqui)
+```
+
+### O que o hook faz
+
+O `scripts/pre-commit.sh` gerado no target repo:
+1. Coleta staged files via `git diff --cached`
+2. Localiza o workspace root (onde `.opencode/scripts/` vive)
+3. Lê toggles do `juninho-config.json` (`skipLintOnPrecommit`, `skipTestOnPrecommit`)
+4. Delega para os scripts do harness (`lint-structure.sh`, `build-verify.sh`, `test-related.sh`)
+5. Esses scripts detectam a stack automaticamente via FS markers e executam os comandos apropriados
+
+### Instalação
+
+```bash
+# Instalar hook em um target repo específico:
+.opencode/scripts/install-target-hooks.sh --repo /path/to/target-repo
+
+# O /j.finish-setup já chama isso automaticamente na Phase 6.
+```
+
+O `@j.implementer` verifica que `.git/hooks/pre-commit` existe antes de commitar. Se não existir, falha com instruções claras.
+
+### Requisito para target repos
+
+Todo target repo que participa do fluxo `/j.implement` **deve** ter:
+- `scripts/pre-commit.sh` — gerado e commitado no repo
+- `.git/hooks/pre-commit` — symlink local (não versionado, instalado por `install-target-hooks.sh`)
 
 ---
 
@@ -836,6 +889,7 @@ Todos rodam a partir de `~/repos/`:
 | `npm run state:clear-task -- <slug> <task-id>` | Remove o diretório de state de uma task | `npm run state:clear-task -- seller-creation-service task-5` |
 | `npm run skills:list` | Lista todas as skills + descrição | `npm run skills:list` |
 | `npm run agents:list` | Lista todos os subagentes + descrição | `npm run agents:list` |
+| `npm run hooks:install -- --repo <path>` | Gera `scripts/pre-commit.sh` + instala symlink no target repo | `npm run hooks:install -- --repo olxbr/trp-seller-api` |
 
 ### 16.3 Caso de uso típico — trocar modelo strong
 

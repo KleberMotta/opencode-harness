@@ -1,5 +1,10 @@
 #!/bin/sh
+# pre-commit.sh — Workspace-level pre-commit hook for the harness repo itself.
+# Runs structure lint + related tests on staged files.
+# The workspace is allowed (ALLOW_WORKSPACE_GIT=1) since this IS the workspace.
 set -e
+
+export ALLOW_WORKSPACE_GIT=1
 
 __SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 . "$__SCRIPT_DIR/_resolve-repo.sh"
