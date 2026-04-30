@@ -8,14 +8,14 @@ This project uses the **Agentic Coding Framework** v2.1 — installed by [juninh
 ```
 /j.spec → docs/specs/{slug}/spec.md + CONTEXT.md (approved)
   → /j.plan → docs/specs/{slug}/plan.md (approved)
-  → /j.implement → @j.validator gates task work
+  → /j.implement → plan-defined @j.validator tasks gate quality
   → /j.check → /j.unify (if enabled by juninho-config workflow)
 ```
 
 **Path B — Plan-driven (lightweight tasks):**
 ```
 /j.plan → plan.md (approved) → plan-autoload injects on next session
-  → /j.implement → @j.validator gates task work
+  → /j.implement → plan-defined @j.validator tasks gate quality
   → /j.check → /j.unify (if enabled by juninho-config workflow)
 ```
 
@@ -69,11 +69,13 @@ Internal to planner. Executability gate — approval bias, max 3 issues.
 Writes `docs/specs/{feature-slug}/spec.md` plus rich `CONTEXT.md` with explorer findings, vocabulary, identifier mappings, constraints, decisions, anti-patterns, and key files.
 
 ### @j.implementer
-READ→ACT→COMMIT→VALIDATE loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with task-scoped subagents on a shared feature branch.
+READ→ACT→STATE→COMMIT loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with task-scoped subagents on a shared feature branch.
 Pre-commit stays fast: structure lint + related tests. Hashline-aware editing.
 Uses the canonical branch `feature/{slug}` for task commits and supports focused single-task execution via `/j.implement-task`.
 When `workflow.implement.singleTaskMode` is `true`, executes one task per invocation and returns to the developer for review before proceeding.
 Writes canonical state to `docs/specs/{slug}/state/**` and records approved task commits in `integration-state.json` during implementation.
+Amend-on-resume: if a commit for the current task already exists (interrupted attempt), uses `--amend` to maintain exactly one commit per task.
+Does NOT auto-invoke `j.validator` — validation is handled by explicit validator tasks in the plan.
 Repo-wide checks happen after implementer exits.
 - Optional Graphify layer: may consult `GRAPH_REPORT.md` or `graphify path` CLI for task-scoped read-time coupling hints, but never widens scope based on Graphify alone.
 

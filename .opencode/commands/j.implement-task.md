@@ -43,7 +43,6 @@ Invoke the `@j.implementer` agent to execute exactly one task from an active pla
 12. The task creates exactly one implementation commit directly on the canonical branch `feature/{feature-slug}` in the resolved target repo.
 13. The command must not create a second/final commit for state artifacts. Leave feature state changes for `/j.unify`, gated by `workflow.unify.commitFeatureArtifacts`.
 14. The command exits after the requested target task is COMPLETE, FAILED, or BLOCKED. It must not continue into sibling tasks, later waves, or other write targets.
-15. Do not request the feature-level `functional-validation-plan.md` closeout pass from this command unless the user explicitly asks for it.
 
 ## Delegation Rule (MANDATORY)
 

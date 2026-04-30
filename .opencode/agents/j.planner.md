@@ -172,7 +172,7 @@ financial-api is a `writeTarget` — not a footnote in the partner-api plan.
 
 **Implementation-pattern binding rule**: Every task that introduces a client, service, repository, controller, DTO, entity, migration, listener, mapper, event, or test must name the canonical pattern/file to follow or explicitly say no local pattern exists. Do not ask implementers to infer patterns from broad directories.
 
-**Local integration validation script rule**: When a feature needs runtime/integration coverage, do not plan traditional in-repo integration test classes as the default. Plan local Python validation scripts under the target repo's `scripts/` directory. The script must own the end-to-end scenarios for the implementation, accept runtime configuration through CLI args or environment variables, print a clear scenario summary, and exit non-zero on failure. If the script does not exist yet, create a `j.implementer` task to add or update it and only verify script syntax/help in that task. A later `j.validator` task must run the exact script command locally and use its result as integration evidence.
+**Local integration validation script rule**: The plan's mandatory final task generates the feature-wide validation script at `scripts/validate_{feature_slug}.py` in each target repo. This script owns the end-to-end validation scenarios for the implementation, accepts runtime configuration through CLI args or environment variables, prints a clear scenario summary, and exits non-zero on failure. The final task is only COMPLETE when the script executes successfully. Intermediate tasks may create or update helper scripts during development, but the canonical validation entry-point is always `scripts/validate_{feature_slug}.py` produced by the last task.
 
 **File-level specificity rule**: Each task's Files section must list the exact files to create or modify — not directories, not wildcards, not "related files". If the file doesn't exist yet, include the full path where it will be created.
 
@@ -264,6 +264,44 @@ Read spec, full CONTEXT, task diffs, and dependency state. Classify each task cr
 ### Done Criteria
 - Validation report is written to `docs/specs/{feature-slug}/state/tasks/task-2/validator-work.md` and no BLOCK/FIX remains.
 
+## Task N — Validation Script and PR Description (ALWAYS LAST)
+- **Project**: {project label}
+- **Wave**: {last wave}
+- **Agent**: j.implementer
+- **Depends**: {all prior tasks}
+- **Skills**: j.shell-script-writing
+
+### Context References
+- `CONTEXT.md#Goal`
+- `CONTEXT.md#Test-and-Build-Policy`
+
+### Files
+- `scripts/validate_{feature_slug}.py`
+- `docs/specs/{feature-slug}/pr-{project-label}.md`
+
+### Action
+- Create `scripts/validate_{feature_slug}.py` that:
+  - Spins up required dependencies (docker-compose, test DB, mock servers) or fails with clear instructions
+  - Validates the full implementation through key end-to-end scenarios
+  - Accepts configuration via CLI args / env vars
+  - Prints clear scenario summary and exits 0 on success, non-zero on failure
+- Run the script: `python3 scripts/validate_{feature_slug}.py` — the task is only COMPLETE if the script passes
+- Read `.github/PULL_REQUEST_TEMPLATE.md` if it exists and use its structure
+- Write `docs/specs/{feature-slug}/pr-{project-label}.md` with:
+  - Feature summary and goal from spec/plan
+  - All tasks and their commit SHAs from `integration-state.json`
+  - Validation script command and output summary as test evidence
+  - Breaking changes if any
+
+### Verification
+- `python3 scripts/validate_{feature_slug}.py` exits 0
+- `docs/specs/{feature-slug}/pr-{project-label}.md` exists and follows PR template
+
+### Done Criteria
+- Validation script passes all scenarios.
+- PR description exists for each write target.
+- Script is committed to the target repo.
+
 ## Risks
 - **HIGH|MEDIUM|LOW**: Description and mitigation.
 ```
@@ -281,6 +319,25 @@ Minimum task detail:
 - Tasks in later waves depend on earlier waves completing
 - Execution still commits on one shared feature branch, so task commits remain sequential even when multiple tasks share a wave
 - If later `/j.check` findings require more code after a task is already COMPLETE, create a new follow-up task with a new id instead of reopening the completed task
+
+**Validator task placement rule**: The planner is responsible for placing explicit `j.validator` tasks at strategic intervals in the plan. The implementer does NOT auto-invoke the validator after each task. Place validator tasks:
+- After every 2–4 implementation tasks, or at the end of each significant wave
+- After high-risk or architecturally important tasks
+- The frequency is at the planner's discretion based on feature complexity and risk
+
+**Final task rule (mandatory)**: The very last task of every plan MUST be an implementation task (`j.implementer`) that:
+1. Generates a Python validation script at `scripts/validate_{feature_slug}.py` in each write target repo. The script must:
+   - Be fully self-contained: spin up any required dependencies (docker-compose, test databases, mock servers) or clearly fail with instructions
+   - Execute the feature's key scenarios end-to-end and print a clear pass/fail summary
+   - Accept runtime configuration via CLI args or environment variables
+   - Exit 0 on success, non-zero on failure
+   - The task is only COMPLETE if the script runs successfully and validates the implementation
+2. Generates a PR description markdown file at `docs/specs/{feature-slug}/pr-{project-label}.md` for each write target. The PR description must:
+   - Follow the project's `.github/PULL_REQUEST_TEMPLATE.md` structure if one exists, otherwise use a standard format (Summary, Changes, Testing, Breaking Changes)
+   - Reference the spec/plan slug and summarize the feature goal
+   - List all tasks implemented and their commit SHAs
+   - Include the validation script command and its output summary as test evidence
+   - For multi-repo features, produce one PR description per write target project
 
 ---
 
