@@ -2,11 +2,17 @@
   "mcp": {
     "context7": {
       "type": "local",
-      "command": ["npx", "-y", "@upstash/context7-mcp@latest"]
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
     },
     "context-mode": {
       "type": "local",
-      "command": ["context-mode"]
+      "command": [
+        "context-mode"
+      ]
     },
     "exa": {
       "type": "remote",
@@ -157,7 +163,9 @@
       }
     }
   },
-  "plugin": ["context-mode"],
+  "plugin": [
+    "context-mode"
+  ],
   "$schema": "https://opencode.ai/config.json",
   "provider": {
     "github-copilot": {
