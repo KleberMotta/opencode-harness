@@ -23,6 +23,7 @@ case "$STACK" in
       echo "[juninho:lint-structure] Stack: maven — no ./mvnw or mvn found, skipping."
       exit 0
     }
+    maven_check_java_version || exit 1
     if pom_has_plugin spotless-maven-plugin; then
       echo "[juninho:lint-structure] Stack: maven — running $MVN spotless:check"
       $MVN -q spotless:check

@@ -65,6 +65,6 @@ Issues (max 3, each with a concrete fix):
 
 - Maximum 3 issues when rejecting — prioritize the most blocking
 - Each issue must include a concrete fix, not just a complaint
-- Do not reject for missing tests — that is the validator's responsibility
+- Do not reject for missing tests — that is the validator's responsibility — EXCEPT when a task creates a testable unit (service, controller, listener, mapper) without including its unit test file in the same task's Files section. This violates test co-location and makes the pre-commit hook unable to validate the commit.
 - Do not reject for architectural preferences — that is the reviewer's domain
 - Do not request changes to scope — the planner already interviewed the developer

@@ -14,6 +14,7 @@ case "$STACK" in
       echo "[juninho:build-verify] Stack: maven — no ./mvnw or mvn found, skipping."
       exit 0
     }
+    maven_check_java_version || exit 1
     echo "[juninho:build-verify] Stack: maven — running $MVN -DskipTests verify"
     $MVN -q -DskipTests verify
     exit 0

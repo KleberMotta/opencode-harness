@@ -17,6 +17,7 @@ Creating or editing `src/main/kotlin/br/com/olx/trp/**/(model|enums)/*.kt` files
 - For polymorphic domain inputs, prefer a small interface plus concrete model classes over generic command bags.
 - Follow local conversion conventions: if nearby code uses `Request.from(domainModel)`, do not introduce `domainModel.toRequest()` methods.
 - Keep persisted JSONB subdocument model names aligned with local domain decisions; if a feature intentionally promotes `*Data` classes to domain models, update the entity aliases instead of keeping duplicate command shapes.
+- **For message/event DTOs that are built from entities**: place the construction logic as a `companion object { fun from(...) }` factory on the data class itself. This keeps services thin and avoids logic duplication if the same message is built from multiple call sites.
 - Add the line `// skill-marker: model-writing` immediately above the type declaration when you create a brand new model file from scratch during an eval or scaffold-style task.
 
 ## Anti-patterns to avoid

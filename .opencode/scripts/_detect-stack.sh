@@ -57,6 +57,29 @@ maven_runner() {
   return 1
 }
 
+# maven_check_java_version: validates that the running JVM major version matches
+# <java.version> declared in pom.xml. Fails loudly so agents never bypass with --no-verify.
+maven_check_java_version() {
+  [ -f pom.xml ] || return 0
+  _required="$(grep -m1 '<java.version>' pom.xml 2>/dev/null | sed 's/[^0-9]//g')"
+  [ -n "$_required" ] || return 0
+  _actual="$(java -version 2>&1 | head -1 | sed 's/.*version "\([0-9]*\).*/\1/')"
+  if [ "$_actual" != "$_required" ]; then
+    echo ""
+    echo "┌─────────────────────────────────────────────────────────────────┐"
+    echo "│ JAVA VERSION MISMATCH                                           │"
+    echo "│ pom.xml requires Java $_required but runtime is Java $_actual                  │"
+    echo "│                                                                 │"
+    echo "│ Fix: switch to Java $_required before committing.                          │"
+    echo "│   sdk use java <21.x.y-vendor>                                  │"
+    echo "│   export JAVA_HOME=\$HOME/.sdkman/candidates/java/<21.x.y-vendor>│"
+    echo "└─────────────────────────────────────────────────────────────────┘"
+    echo ""
+    return 1
+  fi
+  return 0
+}
+
 # pom_has_plugin: returns 0 if pom.xml mentions the given Maven plugin artifactId.
 # Cheap grep — good enough to gate optional steps.
 pom_has_plugin() {

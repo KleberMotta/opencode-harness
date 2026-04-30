@@ -184,6 +184,8 @@ financial-api is a `writeTarget` — not a footnote in the partner-api plan.
 
 **Plan-as-compiler rule**: Treat `plan.md` plus `CONTEXT.md` as the source program for implementation. A task is not ready unless a fresh task-scoped implementer can generate the intended code without inventing patterns, broadening scope, or re-asking domain questions.
 
+**Test co-location rule**: When a task creates or substantially modifies a service, controller, listener, mapper, or other testable unit, that task's Files section MUST include the corresponding unit test file(s). The pre-commit hook derives test class names from staged source files and runs them — if the test is in a separate task/commit, the hook cannot validate the implementation at commit time, silently passing with zero test coverage. Never create standalone "write unit tests" tasks for code that was implemented in an earlier task. The only acceptable standalone test tasks are integration tests or controller tests that require additional infrastructure setup beyond the unit under test.
+
 ### 2.4 Write plan.md
 
 Write a single unified `docs/specs/{feature-slug}/plan.md` in the workspace root.

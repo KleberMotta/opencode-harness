@@ -24,11 +24,12 @@ Creating or editing `docs/specs/**/spec.md`, `docs/specs/**/CONTEXT.md`, `docs/s
 ## Anti-patterns to avoid
 - Writing a spec without `CONTEXT.md`.
 - Re-running planning research as if no spec context exists.
-- Using vague task actions like “implement service layer” or “wire client” without naming files, patterns, fields, and error semantics.
-- Referring to reference behavior as “same as X” without expanding which methods/rules are in scope and which are explicitly excluded.
+- Using vague task actions like "implement service layer" or "wire client" without naming files, patterns, fields, and error semantics.
+- Referring to reference behavior as "same as X" without expanding which methods/rules are in scope and which are explicitly excluded.
 - Leaving identifier mappings implicit, especially when header/body/entity/provider names differ.
 - Letting plan-reviewer approve tasks that require implementers to infer business intent or choose between competing patterns.
 - Treating `CONTEXT.md` as historical scratchpad; it must be the current source of research truth.
+- **Creating separate tasks for unit tests of code implemented in an earlier task.** The pre-commit hook runs related tests derived from staged file names — if the test is in a later task, the hook passes silently with zero coverage. Unit tests MUST be in the same task as the implementation they cover. Standalone test tasks are acceptable only for integration/controller tests requiring additional infrastructure.
 
 ## Recommended CONTEXT.md Sections
 - Goal
