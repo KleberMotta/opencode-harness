@@ -47,8 +47,8 @@ case "$STACK" in
       exit 0
     fi
 
-    echo "[juninho:test-related] Stack: maven — running $MVN test -Dtest='$PATTERNS' -DfailIfNoTests=false"
-    $MVN -q test -Dtest="$PATTERNS" -DfailIfNoTests=false
+    echo "[juninho:test-related] Stack: maven — running $MVN test -Dtest='$PATTERNS' -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false"
+    $MVN -q test -Dtest="$PATTERNS" -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false
     exit 0
     ;;
   terraform)

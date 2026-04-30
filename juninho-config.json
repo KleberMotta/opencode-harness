@@ -22,11 +22,11 @@
     "unify": {
       "enabled": true,
       "updatePersistentContext": true,
-      "updateDomainDocs": false,
-      "updateDomainIndex": false,
+      "updateDomainDocs": true,
+      "updateDomainIndex": true,
       "cleanupIntegratedTaskBookkeeping": true,
       "commitDocUpdates": true,
-      "refreshGraphify": false,
+      "refreshGraphify": true,
       "commitFeatureArtifacts": false,
       "createPullRequest": false,
       "createDeliveryPrBody": false

@@ -24,11 +24,23 @@ Creating or editing `docs/specs/**/spec.md`, `docs/specs/**/CONTEXT.md`, `docs/s
 ## Anti-patterns to avoid
 - Writing a spec without `CONTEXT.md`.
 - Re-running planning research as if no spec context exists.
-- Using vague task actions like “implement service layer” or “wire client” without naming files, patterns, fields, and error semantics.
-- Referring to reference behavior as “same as X” without expanding which methods/rules are in scope and which are explicitly excluded.
+- Using vague task actions like "implement service layer" or "wire client" without naming files, patterns, fields, and error semantics.
+- Referring to reference behavior as "same as X" without expanding which methods/rules are in scope and which are explicitly excluded.
 - Leaving identifier mappings implicit, especially when header/body/entity/provider names differ.
 - Letting plan-reviewer approve tasks that require implementers to infer business intent or choose between competing patterns.
 - Treating `CONTEXT.md` as historical scratchpad; it must be the current source of research truth.
+- **Creating separate tasks for unit tests of code implemented in an earlier task.** The pre-commit hook runs related tests derived from staged file names — if the test is in a later task, the hook passes silently with zero coverage. Unit tests MUST be in the same task as the implementation they cover. Standalone test tasks are acceptable only for integration/controller tests requiring additional infrastructure.
+- Including untested curls/commands in PR descriptions with placeholder values that break when copied literally.
+
+## PR Description Functional Tests — Local Validation Rule
+
+When the plan task that produces the PR description includes a "Functional Tests" section:
+
+1. **Validate before committing**: run each curl/command locally, confirm the expected response, and iterate until all pass. The PR description is not done until the curls work.
+2. **No placeholders**: curls must use real example values (UUIDs, IDs) validated locally — never `{id}`, `<token>`, or template syntax that fails when copy-pasted.
+3. **Document prerequisites** the reviewer needs to reproduce locally (localstack topics/queues, mock principals in `.env.development`, seed data setup, manual steps).
+4. **If validation reveals missing infrastructure** (topics, principals, seed), fix it first — then re-run the curl and confirm success before writing it into the PR.
+5. **Copy-paste-ready**: a reviewer copies the curl block, runs it, gets the documented response — zero edits required.
 
 ## Recommended CONTEXT.md Sections
 - Goal
