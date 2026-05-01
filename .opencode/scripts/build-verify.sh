@@ -44,8 +44,20 @@ case "$STACK" in
     echo "[juninho:build-verify] Stack: node — no build verification available, skipping."
     exit 0
     ;;
+  python)
+    python_activate || {
+      echo "[juninho:build-verify] Stack: python — no python3 found, skipping."
+      exit 0
+    }
+    echo "[juninho:build-verify] Stack: python — trying python compile check"
+    if $PYTHON -c "import compileall; compileall.compile_dir('app', quiet=1)" 2>/dev/null; then
+      exit 0
+    fi
+    echo "[juninho:build-verify] Stack: python — compile check not available, skipping."
+    exit 0
+    ;;
   unknown|*)
-    echo "[juninho:build-verify] Stack: unknown — no pom.xml/mvnw, *.tf, or package.json in $ROOT_DIR. Skipping."
+    echo "[juninho:build-verify] Stack: unknown — no pom.xml/mvnw, *.tf, package.json, requirements.txt, or pyproject.toml in $ROOT_DIR. Skipping."
     exit 0
     ;;
 esac

@@ -92,8 +92,63 @@ case "$STACK" in
     echo "[juninho:test-related] Customize .opencode/scripts/test-related.sh or run /j.finish-setup."
     exit 0
     ;;
+  python)
+    # Heuristic: derive test paths from staged Python files.
+    # app/services/foo.py -> tests/test_services/test_foo.py pattern.
+    TEST_PATHS=""
+    for f in $FILES; do
+      case "$f" in
+        app/*.py|*.py)
+          rel="${f#app/}"
+          rel="${rel%.py}"
+          dir="$(dirname "$rel")"
+          base="$(basename "$rel")"
+          # If the staged file is itself a test, run it directly.
+          case "$f" in
+            tests/*)
+              TEST_PATHS="${TEST_PATHS:+$TEST_PATHS }$f"
+              ;;
+            *)
+              # Derive test path: app/services/ticker_service.py → tests/test_services/test_ticker_service.py
+              candidate="tests/test_${dir}/test_${base}.py"
+              if [ -f "$candidate" ]; then
+                TEST_PATHS="${TEST_PATHS:+$TEST_PATHS }$candidate"
+              else
+                # Fallback: tests/test_${dir}.py (single-file module)
+                candidate2="tests/test_${dir}.py"
+                if [ -f "$candidate2" ]; then
+                  TEST_PATHS="${TEST_PATHS:+$TEST_PATHS }$candidate2"
+                fi
+              fi
+              ;;
+          esac
+          ;;
+      esac
+    done
+
+    if [ -z "$TEST_PATHS" ]; then
+      echo "[juninho:test-related] Stack: python — no .py staged files or no matching test files. Skipping."
+      exit 0
+    fi
+
+    echo "[juninho:test-related] Stack: python — running pytest"
+    python_activate || {
+      echo "[juninho:test-related] Stack: python — no python3 found, skipping."
+      exit 0
+    }
+    export PYTHONPATH="$ROOT_DIR:$PYTHONPATH"
+    $PYTHON -m pytest -q $TEST_PATHS --no-header 2>&1 || {
+      pytest_exit=$?
+      if [ $pytest_exit -eq 5 ]; then
+        echo "[juninho:test-related] No tests collected for staged files; this is OK."
+      else
+        exit $pytest_exit
+      fi
+    }
+    exit 0
+    ;;
   unknown|*)
-    echo "[juninho:test-related] Stack: unknown — no pom.xml/mvnw, *.tf, or package.json in $ROOT_DIR. Skipping."
+    echo "[juninho:test-related] Stack: unknown — no pom.xml/mvnw, *.tf, package.json, requirements.txt, or pyproject.toml in $ROOT_DIR. Skipping."
     exit 0
     ;;
 esac

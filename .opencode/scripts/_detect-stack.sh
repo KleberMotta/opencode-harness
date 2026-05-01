@@ -9,11 +9,13 @@
 #   1. pom.xml OR mvnw present  -> maven   (Java/Kotlin)
 #   2. any *.tf in repo root    -> terraform
 #   3. package.json present     -> node
-#   4. otherwise                -> unknown
+#   4. requirements.txt OR pyproject.toml OR setup.py         -> python
+#   5. requirements.txt OR pyproject.toml OR setup.py present -> python
+#   6. otherwise                -> unknown
 #
-# Precedence: maven > terraform > node. A monorepo carrying both pom.xml and
+# Precedence: maven > terraform > node > python. A monorepo carrying both pom.xml and
 # package.json is treated as primarily maven; callers can opt out by setting
-# JUNINHO_FORCE_STACK=node|maven|terraform|unknown.
+# JUNINHO_FORCE_STACK=node|maven|terraform|python|unknown.
 #
 # This helper does NOT chdir or mutate state. It only reads the filesystem.
 
@@ -38,6 +40,10 @@ detect_stack() {
   unset __ds_f
   if [ -f package.json ]; then
     printf '%s' "node"
+    return 0
+  fi
+  if [ -f requirements.txt ] || [ -f pyproject.toml ] || [ -f setup.py ]; then
+    printf '%s' "python"
     return 0
   fi
   printf '%s' "unknown"
@@ -85,4 +91,29 @@ maven_check_java_version() {
 pom_has_plugin() {
   [ -f pom.xml ] || return 1
   grep -q "<artifactId>$1</artifactId>" pom.xml
+}
+
+# python_activate: detect and source a Python virtual environment.
+# Sets PYTHON and VENV_ACTIVE. Callers should use $PYTHON -m pytest, etc.
+# Returns 0 if a venv was found and activated, 1 otherwise.
+python_activate() {
+  if [ -f .venv/bin/activate ]; then
+    . ./.venv/bin/activate
+    export PYTHON="$PWD/.venv/bin/python"
+    export VENV_ACTIVE=1
+    return 0
+  fi
+  if [ -f venv/bin/activate ]; then
+    . ./venv/bin/activate
+    export PYTHON="$PWD/venv/bin/python"
+    export VENV_ACTIVE=1
+    return 0
+  fi
+  # Fallback: any python3 in PATH
+  if command -v python3 >/dev/null 2>&1; then
+    export PYTHON="$(command -v python3)"
+    export VENV_ACTIVE=0
+    return 0
+  fi
+  return 1
 }

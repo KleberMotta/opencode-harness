@@ -87,8 +87,27 @@ case "$STACK" in
     echo "[juninho:lint-structure] Stack: node — no linter configured (no eslint config, no lint script). Skipping."
     exit 0
     ;;
+  python)
+    python_activate || {
+      echo "[juninho:lint-structure] Stack: python — no python3 found, skipping."
+      exit 0
+    }
+    export PYTHONPATH="$ROOT_DIR:$PYTHONPATH"
+    if command -v ruff >/dev/null 2>&1; then
+      echo "[juninho:lint-structure] Stack: python — running ruff check"
+      ruff check .
+      exit 0
+    fi
+    if command -v flake8 >/dev/null 2>&1; then
+      echo "[juninho:lint-structure] Stack: python — running flake8"
+      flake8 .
+      exit 0
+    fi
+    echo "[juninho:lint-structure] Stack: python — no linter configured (ruff/flake8 not found). Skipping."
+    exit 0
+    ;;
   unknown|*)
-    echo "[juninho:lint-structure] Stack: unknown — no pom.xml/mvnw, *.tf, or package.json in $ROOT_DIR. Skipping."
+    echo "[juninho:lint-structure] Stack: unknown — no pom.xml/mvnw, *.tf, package.json, requirements.txt, or pyproject.toml in $ROOT_DIR. Skipping."
     exit 0
     ;;
 esac
