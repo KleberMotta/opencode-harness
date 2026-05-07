@@ -92,6 +92,26 @@
     "skill": "j.finpy-client-writing"
   },
   {
+    "pattern": "app/services/(ocr_engine|pdf_renderer)\\.py$",
+    "skill": "j.finpy-client-writing"
+  },
+  {
+    "pattern": "app/services/brokerage_parsers/.*\\.py$",
+    "skill": "j.finpy-service-writing"
+  },
+  {
+    "pattern": "app/parsers/.*\\.py$",
+    "skill": "j.finpy-service-writing"
+  },
+  {
+    "pattern": "app/dependencies/.*\\.py$",
+    "skill": "j.finpy-route-writing"
+  },
+  {
+    "pattern": "tests/.*/fake_.*\\.py$",
+    "skill": "j.finpy-test-writing"
+  },
+  {
     "pattern": "tests/.*/test_.*\\.py$",
     "skill": "j.finpy-test-writing"
   }

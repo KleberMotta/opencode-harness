@@ -6,10 +6,11 @@ description: Write external provider client wrappers with typed error translatio
 # Skill: FinPy Client Writing
 
 ## When this skill activates
-Creating or editing `app/services/*_client.py` or any external provider wrapper in stakfin-financial-data.
+Creating or editing `app/services/*_client.py`, `app/services/ocr_engine.py`, `app/services/pdf_renderer.py`, or any external provider/system wrapper in stakfin-financial-data.
 
 ## Required Steps
-- Wrap external library/API calls in a dedicated client class
+- Wrap external library/API calls (yfinance, pytesseract, pymupdf) in a dedicated client class
+- For blocking external calls (pytesseract, pymupdf): wrap in `asyncio.to_thread()` to keep the async event loop free
 - Return typed domain value objects, never raw library return types
 - Map provider-specific exceptions to `AppError` codes through a separate mapping function
 - Handle provider unavailability gracefully (timeout, rate limit, format changes)

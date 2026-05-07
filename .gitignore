@@ -13,6 +13,8 @@
 !README.md
 !/package.json
 !/.github
+!/stakfin
+!/files
 
 # Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
 /tmp/*

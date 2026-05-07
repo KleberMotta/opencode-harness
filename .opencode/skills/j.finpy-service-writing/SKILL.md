@@ -6,10 +6,13 @@ description: Write FastAPI domain services with constructor injection, DB-first 
 # Skill: FinPy Service Writing
 
 ## When this skill activates
-Creating or editing `app/services/*_service.py` files in stakfin-financial-data or similar Python FastAPI projects.
+Creating or editing `app/services/*_service.py`, `app/services/brokerage_parsers/*.py`, `app/parsers/*.py`, or any domain service/parser file in stakfin-financial-data.
 
 ## Required Steps
 - Use constructor injection: all dependencies (repositories, clients, config) passed via `__init__`
+  - Two valid styles: positional (legacy) or keyword-only `*` (newer services)
+- Broker parsers: use Strategy pattern via `BrokerageParser` ABC with `get_parser(broker)` factory
+- Utility parsers (`app/parsers/`): pure synchronous functions, no deps, raise `ValueError` on failure
 - Normalize ticker IDs at service entry via `normalize_ticker_request()` before any processing
 - Implement DB-first pattern: always query PostgreSQL first, fallback to external provider on cache miss
 - Map provider exceptions to `AppError` via error mapping functions (e.g., `map_yfinance_error()`)
