@@ -74,6 +74,8 @@ cd "$ROOT_DIR"
 # The JUNINHO_WORKSPACE env var overrides if set.
 if [ -n "${JUNINHO_WORKSPACE:-}" ]; then
   WORKSPACE_ROOT="$JUNINHO_WORKSPACE"
+elif [ -d "$ROOT_DIR/../opencode-harness/.opencode/scripts" ]; then
+  WORKSPACE_ROOT="$(CDPATH= cd -- "$ROOT_DIR/../opencode-harness" && pwd)"
 elif [ -d "$ROOT_DIR/../../.opencode/scripts" ]; then
   WORKSPACE_ROOT="$(CDPATH= cd -- "$ROOT_DIR/../.." && pwd)"
 elif [ -d "$ROOT_DIR/../../../.opencode/scripts" ]; then

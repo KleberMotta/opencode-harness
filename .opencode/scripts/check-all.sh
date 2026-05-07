@@ -73,6 +73,26 @@ case "$STACK" in
     echo "[juninho:check-all] Customize .opencode/scripts/check-all.sh or run /j.finish-setup."
     exit 0
     ;;
+  python)
+    python_activate || {
+      echo "[juninho:check-all] Stack: python — no python3 found, skipping."
+      exit 0
+    }
+    export PYTHONPATH="$ROOT_DIR:$PYTHONPATH"
+    echo "[juninho:check-all] Running ruff check..."
+    if command -v ruff >/dev/null 2>&1; then
+      ruff check .
+    fi
+
+    echo "[juninho:check-all] Running pytest with coverage..."
+    if command -v pytest >/dev/null 2>&1; then
+      $PYTHON -m pytest --cov=app --cov-report=term-missing
+      exit 0
+    fi
+
+    echo "[juninho:check-all] Stack: python — pytest not found. Skipping tests."
+    exit 0
+    ;;
   unknown|*)
     echo "[juninho:check-all] Unknown stack at $ROOT_DIR — no checks to run."
     exit 0

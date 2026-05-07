@@ -62,5 +62,57 @@
   {
     "pattern": "src/main/kotlin/br/com/olx/trp/.*/(model|enums)/.*\\.kt$",
     "skill": "j.model-writing"
+  },
+  {
+    "pattern": "app/services/[^/]+_service\\.py$",
+    "skill": "j.finpy-service-writing"
+  },
+  {
+    "pattern": "app/services/batching\\.py$",
+    "skill": "j.finpy-batching-writing"
+  },
+  {
+    "pattern": "app/repositories/[^/]+_repository\\.py$",
+    "skill": "j.finpy-repository-writing"
+  },
+  {
+    "pattern": "app/routes/[^/]+\\.py$",
+    "skill": "j.finpy-route-writing"
+  },
+  {
+    "pattern": "app/schemas/[^/]+\\.py$",
+    "skill": "j.finpy-schema-writing"
+  },
+  {
+    "pattern": "app/models/[^/]+\\.py$",
+    "skill": "j.finpy-model-writing"
+  },
+  {
+    "pattern": "app/services/[^/]+_client\\.py$",
+    "skill": "j.finpy-client-writing"
+  },
+  {
+    "pattern": "app/services/(ocr_engine|pdf_renderer)\\.py$",
+    "skill": "j.finpy-client-writing"
+  },
+  {
+    "pattern": "app/services/brokerage_parsers/.*\\.py$",
+    "skill": "j.finpy-service-writing"
+  },
+  {
+    "pattern": "app/parsers/.*\\.py$",
+    "skill": "j.finpy-service-writing"
+  },
+  {
+    "pattern": "app/dependencies/.*\\.py$",
+    "skill": "j.finpy-route-writing"
+  },
+  {
+    "pattern": "tests/.*/fake_.*\\.py$",
+    "skill": "j.finpy-test-writing"
+  },
+  {
+    "pattern": "tests/.*/test_.*\\.py$",
+    "skill": "j.finpy-test-writing"
   }
 ]

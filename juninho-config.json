@@ -1,8 +1,8 @@
 {
   "models": {
-    "strong": "github-copilot/claude-opus-4.6",
-    "medium": "github-copilot/claude-sonnet-4.6",
-    "weak": "github-copilot/claude-haiku-4.5"
+    "strong": "deepseek/deepseek-v4-pro",
+    "medium": "deepseek/deepseek-v4-pro",
+    "weak": "deepseek/deepseek-chat"
   },
   "workflow": {
     "automation": {
@@ -17,7 +17,7 @@
       "reenterImplementOnFullCheckFailure": true,
       "watchdogSessionStale": false,
       "refreshExecutionHeartbeat": false,
-      "singleTaskMode": true
+      "singleTaskMode": false
     },
     "unify": {
       "enabled": true,
