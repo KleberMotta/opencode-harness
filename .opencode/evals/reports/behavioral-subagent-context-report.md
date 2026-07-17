@@ -9,9 +9,9 @@
 - Preferred tool: task
 - Preferred tool used: yes
 - Tool calls: 1
-- Duration: 20.84s
-- Transcript: /Users/kleber.motta/repos/tmp/juninho-behavioral-QPUTFI/eval-output.jsonl
-- Sandbox: /Users/kleber.motta/repos/tmp/juninho-behavioral-QPUTFI
+- Duration: 21.41s
+- Transcript: /Users/kleber.motta/repos/tmp/juninho-behavioral-SIgLvu/eval-output.jsonl
+- Sandbox: /Users/kleber.motta/repos/tmp/juninho-behavioral-SIgLvu
 - Orchestrator feedback: <none>
 - Expected answer: startup-context=ready
 - Actual answer: startup-context=ready
@@ -21,7 +21,7 @@
   "task": {
     "count": 1,
     "durationsMs": [
-      4172
+      5548
     ]
   }
 }

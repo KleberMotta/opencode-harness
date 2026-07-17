@@ -256,11 +256,6 @@ export function resolvePathFromProjectRoot(projectRoot: string, value: string): 
   return path.isAbsolute(value) ? value : path.join(projectRoot, value)
 }
 
-export function getGraphifyPath(targetRepoRoot: string, outputDir = "docs/domain/graphify"): string {
-  const trimmedOutputDir = outputDir.trim() || "docs/domain/graphify"
-  return path.isAbsolute(trimmedOutputDir) ? trimmedOutputDir : path.join(targetRepoRoot, trimmedOutputDir)
-}
-
 export function resolveProjectPaths(workspaceRoot: string, hints: ProjectHints = {}): ProjectPaths | null {
   const projectRoot = resolveTargetProjectRoot(workspaceRoot, hints)
   if (!projectRoot) return null

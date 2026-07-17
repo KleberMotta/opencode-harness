@@ -10,7 +10,6 @@ const ALLOWED_WORKFLOW = new Set([
   "automation",
   "implement",
   "unify",
-  "graphify",
   "documentation",
   "telemetry",
 ])
@@ -46,19 +45,10 @@ const ALLOWED_UNIFY = new Set([
   "updateDomainIndex",
   "cleanupIntegratedTaskBookkeeping",
   "commitDocUpdates",
-  "refreshGraphify",
   "commitFeatureArtifacts",
   "createPullRequest",
   "createDeliveryPrBody",
   "proposeKnowledgePromotion",
-])
-
-const ALLOWED_GRAPHIFY = new Set([
-  "enabled",
-  "outputDir",
-  "staleAfterDays",
-  "maxCacheMb",
-  "installMethod",
 ])
 
 const ALLOWED_DOCUMENTATION = new Set([
@@ -85,7 +75,6 @@ issues.push(...unknownKeys(wf, ALLOWED_WORKFLOW, "workflow"))
 if (wf.automation) issues.push(...unknownKeys(wf.automation, ALLOWED_AUTOMATION, "workflow.automation"))
 if (wf.implement) issues.push(...unknownKeys(wf.implement, ALLOWED_IMPLEMENT, "workflow.implement"))
 if (wf.unify) issues.push(...unknownKeys(wf.unify, ALLOWED_UNIFY, "workflow.unify"))
-if (wf.graphify) issues.push(...unknownKeys(wf.graphify, ALLOWED_GRAPHIFY, "workflow.graphify"))
 if (wf.documentation) issues.push(...unknownKeys(wf.documentation, ALLOWED_DOCUMENTATION, "workflow.documentation"))
 if (wf.telemetry) issues.push(...unknownKeys(wf.telemetry, ALLOWED_TELEMETRY, "workflow.telemetry"))
 

@@ -146,6 +146,26 @@ for (const contextDir of contextDirs) {
           fix: `falta: ${missing.join(", ")} — crie em ${contextDir}`,
         }
   )
+
+  // lint-rules só entra no gate do lint-structure.sh com jar + config + CLI;
+  // faltando qualquer um, o gate pula em silêncio — avise, não bloqueie.
+  const lintRulesDir = path.join(contextDir, "lint-rules")
+  if (existsSync(lintRulesDir)) {
+    const detektMissing: string[] = []
+    if (!existsSync(path.join(lintRulesDir, "rules.jar"))) detektMissing.push("rules.jar (cd lint-rules && gradle build && cp build/libs/rules.jar .)")
+    if (!existsSync(path.join(lintRulesDir, "detekt.yml"))) detektMissing.push("detekt.yml")
+    if (!commandPath("detekt")) detektMissing.push("CLI detekt (brew install detekt)")
+    checks.push(
+      detektMissing.length === 0
+        ? { ok: true, label: `regras detekt ativas em ${contextLabel}` }
+        : {
+            ok: false,
+            warn: true,
+            label: `regras detekt de ${contextLabel} inativas (gate pula em silêncio)`,
+            fix: `falta: ${detektMissing.join(" · ")}`,
+          }
+    )
+  }
 }
 
 // 7. References materializadas (informativo)
@@ -170,16 +190,6 @@ if (hasReferencesJson) {
           label: "references.json de contexto existe mas opencode.json não tem bloco references",
           fix: "rode: bun run sync",
         }
-  )
-}
-
-// 8. Graphify (opcional, só quando habilitado)
-if (config.workflow?.graphify?.enabled) {
-  const graphifyOk = Boolean(commandPath("graphify"))
-  checks.push(
-    graphifyOk
-      ? { ok: true, label: "graphify CLI disponível" }
-      : { ok: false, warn: true, label: "graphify habilitado mas CLI ausente", fix: "instale: pipx install graphifyy (ou desligue: bun run toggle graphify.enabled false)" }
   )
 }
 

@@ -32,7 +32,6 @@ Then, for each write target project (`$REPO_ROOT`):
 7. `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
 8. existing `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-review.md` when present — before overwriting it, extract the previous `Verdict:`, `Failure fingerprint:` and `Reentry count:` lines, the previous `## Reentry Contract` `Next action`, and capture the file's mtime (e.g. `ls -l` or `stat` on the path) — Step 3.5 needs all of them
 9. existing `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/check-all-output.txt` when present
-10. optional `$REPO_ROOT/docs/domain/graphify/GRAPH_REPORT.md` when present; never ingest raw `graph.json`
 
 Infer `{feature-slug}` from the active plan when not explicitly provided.
 Spec artifacts and implementation state live in the workspace root (`$WORKSPACE_ROOT/docs/specs/`), not in each target repo. Only domain/principles docs remain in target repos.
@@ -79,8 +78,6 @@ The reviewer prompt must explicitly say:
   - simplicity / bloat / over-engineering / maintainability
 - read `functional-validation-plan.md` when it exists
 - read `CONTEXT.md` and treat it as the durable business/research intent source for spec/plan alignment
-- read `docs/domain/graphify/GRAPH_REPORT.md` when it exists and use it as summary-only context; if Graphify CLI is available, use `graphify explain` for suspicious cross-domain edges
-- if Graphify is disabled, stale, missing, or unavailable, record a NOTE/validation gap only and continue the review
 - write the report body for persistence to `docs/specs/{feature-slug}/state/check-review.md`
 - include exactly these section headings in markdown:
   - `# Code Review`
@@ -97,8 +94,6 @@ The reviewer prompt must explicitly say:
   - `## Overall: ...`
 
 If the reviewer needs more context, provide it and re-delegate.
-
-If `GRAPH_REPORT.md` exists, pass only a short summary or relevant excerpt to the reviewer. Do not persist or attach raw `graph.json` to `check-review.md` or `check-all-output.txt`.
 
 ---
 

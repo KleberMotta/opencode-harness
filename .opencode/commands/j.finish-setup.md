@@ -117,16 +117,6 @@ Conventions are MEASURED, not described: deterministic analyzers emit facts, the
     - `sh scripts/pre-commit.sh` — local pre-commit checks (lint + build + related tests); auto-installed by harness
     ```
 
-### Phase 7 — Bootstrap Graphify
-
-21. Read the harness `juninho-config.json` and inspect `workflow.graphify.enabled`
-22. If Graphify is disabled, record an intentional skip for this phase and do not run any build
-23. If Graphify is enabled, run `npm run graphify:build -- --repo "$PROJECT_ROOT"` from the harness root
-24. Document Graphify outputs in `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`
-25. If Graphify cache/output exceeds 100 MB, emit a warning and recommend Git LFS; do not migrate automatically
-26. Do not enable `--watch` or add CI automation as part of this phase
-27. Graphify integrates via CLI (`graphify query`, `graphify path`, `graphify explain`) and the official opencode skill/plugin — not as an MCP server.
-
 ## Delegation Rule (MANDATORY)
 
 You MUST use `@j.explore` for Phase 1. Do NOT try to scan the codebase yourself.
@@ -152,4 +142,3 @@ After completion, the target project will have:
 - Domain documentation populated with real business domains at `$PROJECT_ROOT/docs/domain/`
 - Principles documentation reflecting actual codebase patterns at `$PROJECT_ROOT/docs/principles/`
 - Updated local automation stubs and command references
-- Optional Graphify output at `$PROJECT_ROOT/docs/domain/graphify/` when `workflow.graphify.enabled` is true

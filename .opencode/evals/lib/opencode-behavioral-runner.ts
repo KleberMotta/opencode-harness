@@ -295,8 +295,8 @@ function seedHarnessSandbox(root: string) {
   cpSync(path.join(sourceRepo, "opencode.json"), path.join(root, "opencode.json"))
   cpSync(path.join(sourceRepo, ".opencode"), path.join(root, ".opencode"), { recursive: true })
 
-  // Replace active-plan.json with sandbox-local pointers so graphify-serve.sh and
-  // plan-autoload resolve correctly inside the eval sandbox.
+  // Replace active-plan.json with sandbox-local pointers so plan-autoload
+  // resolves correctly inside the eval sandbox.
   const activePlanPath = path.join(root, ".opencode", "state", "active-plan.json")
   writeFileSync(
     activePlanPath,

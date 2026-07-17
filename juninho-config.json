@@ -1,8 +1,8 @@
 {
   "models": {
-    "strong": "github-copilot/claude-opus-4.6",
-    "medium": "github-copilot/claude-sonnet-4.6",
-    "weak": "github-copilot/claude-haiku-4.5"
+    "strong": "github-copilot/gpt-5.6-sol",
+    "medium": "github-copilot/gpt-5.6-terra",
+    "weak": "github-copilot/gpt-5.6-luna"
   },
   "workflow": {
     "automation": {
@@ -26,17 +26,9 @@
       "updateDomainIndex": true,
       "cleanupIntegratedTaskBookkeeping": true,
       "commitDocUpdates": true,
-      "refreshGraphify": true,
       "commitFeatureArtifacts": false,
       "createPullRequest": false,
       "createDeliveryPrBody": false
-    },
-    "graphify": {
-      "enabled": true,
-      "outputDir": "docs/domain/graphify",
-      "staleAfterDays": 7,
-      "maxCacheMb": 100,
-      "installMethod": "pipx"
     },
     "documentation": {
       "preferAgentsMdForLocalRules": true,

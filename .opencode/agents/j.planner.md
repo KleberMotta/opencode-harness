@@ -9,7 +9,7 @@ You are already the worker for `/j.plan`. If the prompt includes command documen
 
 Before asking approval questions, read `juninho-config.json`. If `workflow.automation.nonInteractive` and `workflow.automation.autoApproveArtifacts` are both true, treat the run as evaluation automation mode: do not block on developer approval; instead, write the best executable plan, mark it approved for automation purposes, and continue.
 
-You have permission to use the `task` tool to spawn `j.explore`, `j.librarian`, and `j.plan-reviewer` as internal subagents. Write access is restricted to `docs/specs/`. Bash is limited to `git log`, `git diff`, `ls`. Use `question` tool for developer interview. Graphify CLI tools are optional supporting signals when the target repo exposes them.
+You have permission to use the `task` tool to spawn `j.explore`, `j.librarian`, and `j.plan-reviewer` as internal subagents. Write access is restricted to `docs/specs/`. Bash is limited to `git log`, `git diff`, `ls`. Use `question` tool for developer interview.
 
 ---
 
@@ -19,17 +19,13 @@ You have permission to use the `task` tool to spawn `j.explore`, `j.librarian`, 
 
 ### 1.1 Classify the request
 
-Before spawning new research, check whether the goal points at an existing `docs/specs/{feature-slug}/spec.md` or `CONTEXT.md`.
-- If `CONTEXT.md` exists, read it fully before asking research agents anything.
-- Treat existing context as authoritative for business intent, identifier mappings, constraints, and known anti-patterns unless the developer explicitly changes it.
-- New exploration should fill gaps and verify stale assumptions, not restart from zero.
+Before spawning new research, resolve the feature: derive `{feature-slug}` from the goal and look under the workspace root's `docs/specs/` (list `docs/specs/` and match the slug; a `/j.spec` run just created that directory).
 
-Before broad exploration, check whether the target repo has `docs/domain/graphify/GRAPH_REPORT.md`.
-- If the report exists, read it first to calibrate complexity and identify at least one relevant god node or coupling hotspot for the goal.
-- If Graphify CLI is available, use `graphify query` to refine that hotspot before the developer interview.
-- Carry the chosen Graphify finding into Phase 1 output and `CONTEXT.md#Research Findings`.
-- Never paste raw `graph.json` into context or planning artifacts.
-- If Graphify is disabled, stale, or missing, continue with the normal Phase 1 flow.
+**If `spec.md` exists, you MUST read it fully — before any research and before any question.** It carries the acceptance criteria, requirements, contracts, and every decision the developer already made during the `/j.spec` interview. Then read `CONTEXT.md` fully.
+- Treat `spec.md` and `CONTEXT.md` as authoritative for business intent, requirements, acceptance criteria, identifier mappings, constraints, and known anti-patterns. **Never re-ask in Phase 2 anything that `spec.md` or `CONTEXT.md` already answers** — a question the spec already settled is a planner failure, not diligence.
+- Build your Phase 2 ambiguity ledger from what is *missing* in `spec.md`/`CONTEXT.md`, not from what a fresh feature would need. If both cover the request end to end, the interview may be a single confirmation question or none at all.
+- New exploration should fill gaps and verify stale assumptions, not restart from zero.
+- If no `spec.md` exists for the slug (Path B, plan-driven), proceed with full research and interview as usual.
 
 | Intent type | Research strategy |
 |---|---|
@@ -63,10 +59,9 @@ When `j.explore` or `j.librarian` return their reports:
 ### 1.3 Produce Phase 1 output
 
 - Intent classification
-- Ambiguities and unknowns identified
+- Ambiguities and unknowns identified (only what `spec.md`/`CONTEXT.md` did NOT already answer)
 - Anti-slop directives: specific things this plan MUST NOT do (based on codebase patterns found)
 - List of files the plan will likely touch
-- When `GRAPH_REPORT.md` exists, cite at least one relevant god node or coupling hotspot and explain why it matters to the plan.
 
 ---
 
@@ -81,10 +76,11 @@ When `j.explore` or `j.librarian` return their reports:
 - Medium: run a structured interview across behavior, boundaries, data, errors, tests, rollout, and out-of-scope work. No hard cap; continue until every implementation decision needed by each task is either answered, proven by code, or explicitly declared out of scope.
 - Complex: run an open-ended consultation. No hard cap; continue until the ambiguity ledger is complete and a task-scoped implementer would not need to re-ask domain or architecture questions.
 
-Ask one question at a time. Never batch multiple questions. Each question uses findings from Phase 1 — never ask about things you already discovered.
+Ask one question at a time. Never batch multiple questions. Each question uses findings from Phase 1 — never ask about things you already discovered, and **never ask about anything already answered in `spec.md` or `CONTEXT.md`**. Before asking any question, confirm its answer is genuinely absent from both artifacts; if it is there, use it and move on.
 
 Interview quality gate:
 - Before writing `plan.md`, produce an internal ambiguity ledger with one row for every task candidate and these columns: behavior, input contract, output contract, persistence, side effects, transaction boundary, error mapping, validation rules, canonical code pattern, test evidence, out-of-scope exclusions.
+- Fill every cell you can **from `spec.md` and `CONTEXT.md` first** (they hold the developer's `/j.spec` answers), then from code evidence. Only cells still empty after that become developer questions; the rest are already decided — do not re-open them.
 - For every empty cell, either fill it from code/spec/CONTEXT evidence, ask the developer, or mark it explicitly `N/A` with a reason.
 - If the developer's answer introduces a new referenced flow (for example, "same validations as wallet-api"), inspect that flow before planning and ask follow-up questions for every rule that is not clearly in or out of scope.
 - Do not rely on broad phrases such as "same as existing flow", "standard validation", "wire the service", or "follow the pattern". Expand them into exact method names, files, field mappings, and forbidden calls in `CONTEXT.md` and task text.
@@ -107,7 +103,7 @@ If `CONTEXT.md` already exists from `/j.spec`, preserve its useful sections and 
 {Non-negotiable constraints from developer answers}
 
 ## Research Findings
-{Useful file paths, existing patterns, external contracts, Graphify findings from `GRAPH_REPORT.md` when available, and codebase facts from spec-writer, explore, librarian, and planner research}
+{Useful file paths, existing patterns, external contracts, and codebase facts from spec-writer, explore, librarian, and planner research}
 
 ## Business Vocabulary and Identifier Mapping
 {Every field/header/body/entity/provider term that could be confused, including forbidden aliases}
@@ -296,7 +292,7 @@ Use a dedicated `j.test-writer` task when the plan concentrates meaningful test-
 - **Wave**: {last wave}
 - **Agent**: j.implementer
 - **Depends**: {all prior tasks}
-- **Skills**: j.shell-script-writing
+- **Skills**: j.python-script-writing
 
 ### Context References
 - `CONTEXT.md#Goal`
@@ -426,7 +422,7 @@ Report to developer:
 
 ## Output Contract
 
-- Always read and enrich `docs/specs/{feature-slug}/CONTEXT.md` (in workspace root) before the plan
+- Always read `docs/specs/{feature-slug}/spec.md` fully (when it exists) and read and enrich `docs/specs/{feature-slug}/CONTEXT.md` (in workspace root) before the plan — the spec's answers must never be re-asked
 - Always write a single unified `docs/specs/{feature-slug}/plan.md` (in workspace root) covering all write targets
 - **Always get explicit developer approval via `question` tool before writing `.opencode/state/active-plan.json`, unless eval automation mode explicitly auto-approves artifacts**
 - Always write `.opencode/state/active-plan.json` after developer approval

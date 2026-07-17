@@ -263,11 +263,7 @@ Context economy rules (apply to every step below):
 8. If resuming, read the current task's execution state and validator log first.
 9. Use structured code tools first when locating symbols or mechanical edit targets.
 10. Read every file you will modify.
-11. If the target repo has `docs/domain/graphify/GRAPH_REPORT.md` and Graphify CLI is available, you may optionally read the report and use `graphify path` between task-owned files or symbols to understand existing coupling.
-   - Graphify is advisory only. Never widen the task boundary or invent new work because it revealed extra hotspots.
-   - Never paste raw `graph.json` into task context or artifacts.
-   - If Graphify is disabled, stale, or missing, skip it and continue with the normal READ flow.
-12. Follow existing patterns exactly.
+11. Follow existing patterns exactly.
 
 Path rule:
 
@@ -280,7 +276,6 @@ Task boundary rule:
 - Treat the plan task file list as the task's ownership boundary.
 - Treat `CONTEXT.md` identifier mappings, anti-patterns, and canonical pattern choices as part of the task boundary.
 - Small incidental edits outside that list are acceptable only when mechanically required by the planned change.
-- Do not widen scope only because Graphify exposed adjacent nodes, paths, or coupling hotspots outside the planned task files.
 - If the task needs substantial edits to another task's file, stop and report a plan defect instead of widening scope ad hoc.
 - If `/j.check` requires additional substantial work after a task is COMPLETE, stop treating it as ownership of the completed task and create a new follow-up task in the plan/state trail.
 

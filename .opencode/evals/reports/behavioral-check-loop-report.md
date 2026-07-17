@@ -9,9 +9,9 @@
 - Preferred tool: task
 - Preferred tool used: yes
 - Tool calls: 1
-- Duration: 83.96s
-- Transcript: /Users/kleber.motta/repos/tmp/juninho-behavioral-aUprzr/eval-output.jsonl
-- Sandbox: /Users/kleber.motta/repos/tmp/juninho-behavioral-aUprzr
+- Duration: 75.63s
+- Transcript: /Users/kleber.motta/repos/tmp/juninho-behavioral-qsW8U0/eval-output.jsonl
+- Sandbox: /Users/kleber.motta/repos/tmp/juninho-behavioral-qsW8U0
 - Orchestrator feedback: <none>
 - Expected answer: check-loop=ready
 - Actual answer: check-loop=ready
@@ -21,7 +21,7 @@
   "task": {
     "count": 1,
     "durationsMs": [
-      67622
+      63292
     ]
   }
 }

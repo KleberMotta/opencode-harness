@@ -19,7 +19,7 @@ Invoke the `@j.planner` agent to create an actionable plan from a goal.
 ## What happens
 
 1. `@j.planner` classifies your intent
-2. Reads any existing `spec.md` and required `CONTEXT.md` for the feature before new exploration
+2. **Reads any existing `spec.md` fully** (it holds the acceptance criteria and every answer you gave during `/j.spec`) and the required `CONTEXT.md`, before new exploration — and never re-asks what the spec already answers
 3. Explores the codebase for missing or stale context across all involved repositories
 4. Uses project rules, domain docs, principle docs, and the existing `CONTEXT.md` before fixing the plan
 4. Classifies repositories into **write targets** (repos with code changes) and **reference projects** (read-only context)

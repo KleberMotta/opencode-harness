@@ -6,33 +6,20 @@
 #   {KEY}_STATE=active|inactive
 #   {KEY}_RECALL=comma, separated, keywords
 #   {KEY}_FILE=docs/principles/{file}.md
+#   {KEY}_PRIORITY=50          # optional, lower loads first (default 50)
+#   {KEY}_ALWAYS=false         # optional, true injects without a keyword match
 #
 # When a prompt word matches any keyword in _RECALL, the corresponding _FILE
 # is injected into the agent's context before it processes the prompt.
-# Add entries as /j.finish-setup discovers patterns, or manually as you codify decisions.
-
-AUTH_STATE=active
-AUTH_RECALL=auth, authentication, login, logout, session, token, jwt, oauth, clerk, middleware
-AUTH_FILE=docs/principles/auth-patterns.md
-
-ERROR_STATE=active
-ERROR_RECALL=error, exception, try, catch, throw, failure, handle, boundary
-ERROR_FILE=docs/principles/error-handling.md
-
-API_STATE=active
-API_RECALL=api, route, endpoint, handler, request, response, next, http, rest
-API_FILE=docs/principles/api-patterns.md
-
-DATA_STATE=active
-DATA_RECALL=database, prisma, query, schema, migration, model, repository, orm
-DATA_FILE=docs/principles/data-patterns.md
-
-TEST_STATE=active
-TEST_RECALL=test, spec, jest, mock, fixture, coverage, unit, integration, e2e
-TEST_FILE=docs/principles/test-patterns.md
-
-# ── Add project-specific entries below ──────────────────────────────────────
-# Example:
-# PAYMENT_STATE=active
-# PAYMENT_RECALL=payment, stripe, checkout, invoice, subscription, billing
-# PAYMENT_FILE=docs/principles/payment-patterns.md
+#
+# This file is a SKELETON: the header above is the format contract, and there
+# are intentionally no entries below it. Entries are per-repo — the keywords
+# must come from the real vocabulary of the target repo (its domain terms,
+# frameworks, and layer names), not from a generic stack. Populate it with
+# /j.finish-setup, which reads the repo and codifies the patterns it finds, or
+# add entries by hand as you codify decisions.
+#
+# Every {KEY}_FILE must point to a file that exists — carl-inject silently
+# skips a missing target, so a dead entry is a principle that never injects.
+# The structural eval "principles manifest declares no dead entries" enforces
+# this.

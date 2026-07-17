@@ -212,6 +212,78 @@ function twoTaskPlan(): string {
   ].join("\n")
 }
 
+// Two tasks that declare different skills on their "- **Skills**:" line, so a
+// task-scoped session can be checked for receiving its own skill and not its
+// sibling's. j.controller-writing and j.mapper-writing are written into
+// {tempRoot}/.opencode/skills by beforeEach; j.ghost-writing does not exist
+// anywhere, which is the "plan cites a skill that does not exist" case.
+function twoTaskPlanWithSkills(options?: { taskTwoSkills?: string }): string {
+  return [
+    "# Plan: Feature X",
+    "",
+    "- **Goal**: Test feature plan.",
+    "- **Spec**: docs/specs/feature-x/spec.md",
+    "- **Context**: docs/specs/feature-x/CONTEXT.md",
+    "",
+    "## Task 1 — Update settlement controller",
+    "- **Project**: test/repo",
+    "- **Wave**: 1",
+    "- **Agent**: j.implementer",
+    "- **Depends**: None",
+    "- **Skills**: j.controller-writing",
+    "",
+    "### Action",
+    "TASK-ONE-ONLY-MARKER Update the settlement controller.",
+    "",
+    "### Done Criteria",
+    "- Controller updated.",
+    "",
+    "## Task 2 — Update payout mapper",
+    "- **Project**: test/repo",
+    "- **Wave**: 1",
+    "- **Agent**: j.implementer",
+    "- **Depends**: None",
+    `- **Skills**: ${options?.taskTwoSkills ?? "j.mapper-writing"}`,
+    "",
+    "### Action",
+    "TASK-TWO-ONLY-MARKER Update the payout mapper.",
+    "",
+    "### Done Criteria",
+    "- Mapper updated.",
+    "",
+  ].join("\n")
+}
+
+// Routes a task-scoped child session for {taskID} and returns its injected
+// system prompt.
+async function renderTaskScopedSession(harness: PluginHarness, taskID: string): Promise<string> {
+  await harness.runToolBefore(
+    { tool: "task", sessionID: "skills-parent", callID: "1" },
+    {
+      args: {
+        prompt: `Execute task ${taskID}\nAttempt: 1`,
+        contract: {
+          taskID,
+          planPath: "docs/specs/feature-x/plan.md",
+          specPath: "docs/specs/feature-x/spec.md",
+          contextPath: "docs/specs/feature-x/CONTEXT.md",
+        },
+      },
+    }
+  )
+  await harness.runEvent({
+    type: "session.created",
+    properties: {
+      sessionID: `skills-child-${taskID}`,
+      info: { parentID: "skills-parent", title: `Execute task ${taskID} — foo (@j.implementer subagent)` },
+    },
+  })
+
+  const childOutput = { message: {}, parts: [] as unknown[] }
+  await harness.runChatMessage({ sessionID: `skills-child-${taskID}` }, childOutput)
+  return typeof childOutput.message.system === "string" ? childOutput.message.system : ""
+}
+
 async function createHarness(pluginNames: string[], options?: { client?: MockSessionClient; directory?: string }) {
   const root = repoRoot()
   const plugins = []
@@ -286,6 +358,78 @@ describe("context injection plugins", () => {
     expect(system).toContain("TASK-TWO-ONLY-MARKER")
     expect(system).not.toContain("TASK-ONE-ONLY-MARKER")
     expect(system).not.toContain("Active plan detected")
+  })
+
+  test("plan-autoload injects the skills a task declares, and not a sibling task's", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlanWithSkills(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    const system = await renderTaskScopedSession(harness, "2")
+
+    // The declared skill arrives whole, not as a pointer: the task writes the
+    // mapper before any Read could trigger the file-pattern injector.
+    expect(system).toContain("[plan-autoload] Skill declared by Task — j.mapper-writing:")
+    expect(system).toContain("MAPPER-SKILL-MARKER")
+    expect(system).toContain("Prefer manual Function/BiFunction mappers")
+    // Task 1's skill belongs to Task 1.
+    expect(system).not.toContain("j.controller-writing")
+    expect(system).not.toContain("Keep controllers thin")
+    expect(system).not.toContain("WARNING")
+  })
+
+  test("plan-autoload pays for a declared skill at most once per session", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlanWithSkills(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    const system = await renderTaskScopedSession(harness, "2")
+    expect(system).toContain("MAPPER-SKILL-MARKER")
+
+    // Compaction re-injects the task section, but re-paying 12KB of conventions
+    // is the context tax task-scoping exists to cut.
+    const compactOutput = { context: [] as string[] }
+    await harness.runCompaction({ sessionID: "skills-child-2" }, compactOutput)
+    const compacted = compactOutput.context.join("\n")
+    expect(compacted).toContain("task-scoped session for Task 2")
+    expect(compacted).not.toContain("MAPPER-SKILL-MARKER")
+  })
+
+  test("plan-autoload warns when a task declares a skill that does not resolve", async () => {
+    writeFileSync(
+      path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"),
+      twoTaskPlanWithSkills({ taskTwoSkills: "j.ghost-writing, j.mapper-writing" }),
+      "utf-8"
+    )
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    // A plan citing a non-existent skill is a defect in the plan: it is
+    // reported, and it does not take the injection down with it.
+    const system = await renderTaskScopedSession(harness, "2")
+    expect(system).toContain('WARNING: Task declares skill "j.ghost-writing"')
+    expect(system).toContain("no SKILL.md resolves for it")
+    // The resolvable sibling on the same line still arrives.
+    expect(system).toContain("MAPPER-SKILL-MARKER")
+    expect(system).toContain("TASK-TWO-ONLY-MARKER")
+  })
+
+  test("plan-autoload does not inject task skills into the owner session", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlanWithSkills(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    const chatOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "owner-1" }, chatOutput)
+    const system = typeof chatOutput.message.system === "string" ? chatOutput.message.system : ""
+
+    // The owner gets the whole plan — including every task's Skills line as
+    // text — but never a skill body: it routes tasks, it does not write files.
+    expect(system).toContain("[plan-autoload] Active plan detected")
+    expect(system).toContain("- **Skills**: j.mapper-writing")
+    expect(system).not.toContain("[plan-autoload] Skill declared by Task")
+    expect(system).not.toContain("MAPPER-SKILL-MARKER")
+    expect(system).not.toContain("WARNING")
   })
 
   test("plan-autoload keeps the full plan for the parent session", async () => {

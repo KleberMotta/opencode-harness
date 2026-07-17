@@ -38,21 +38,9 @@ This project uses the **Agentic Coding Framework** v2.1 — installed by [juninh
 | `/j.pr-review` | Advisory review of current branch diff |
 | `/j.status` | Show `execution-state.md` summary |
 | `/j.unify` | Reconcile, update docs, cleanup integrated task bookkeeping, create PR |
-| `npm run graphify:build` | Build optional Graphify output for a target repo (`--force` for manual smoke) |
-| `npm run graphify:refresh` | Run incremental Graphify refresh when explicitly enabled |
-| `npm run graphify:status` | Inspect Graphify enabled/output/cache status without building |
 | `/j.start-work <task>` | Initialize a focused work session |
 | `/j.handoff` | Prepare end-of-session handoff doc |
 | `/j.ulw-loop` | Maximum parallelism mode |
-
-## Optional Graphify
-
-- `/j.finish-setup` Phase 7 bootstraps Graphify only when `workflow.graphify.enabled` is true.
-- Enabled flow runs `npm run graphify:build -- --repo "$PROJECT_ROOT"` and writes outputs to `$PROJECT_ROOT/docs/domain/graphify/{graph.html,graph.json,GRAPH_REPORT.md,cache/}`.
-- Disabled flow records an intentional skip; no watch mode, git hook, or pre-commit automation is allowed.
-- Graphify integrates via CLI (`graphify query`, `graphify path`, `graphify explain`) and the official opencode skill/plugin — not as an MCP server. The legacy `mcp.graphify` entry in `opencode.json` is disabled.
-- `/j.unify` may run `npm run graphify:refresh -- --repo "$REPO_ROOT" --incremental` before the doc-sync commit only when both `workflow.unify.refreshGraphify` and `workflow.graphify.enabled` are true.
-- Any refreshed `docs/domain/graphify/**` files must land in the same gated doc-sync commit; Graphify refresh never creates its own commit.
 
 ## Agent Roster
 
@@ -61,7 +49,6 @@ Three-phase pipeline orchestrated internally:
 - **Phase 1 (Metis)**: Spawns `@j.explore` + `@j.librarian` in parallel, classifies intent
 - **Phase 2 (Prometheus)**: Interviews developer (proportional to complexity), writes `CONTEXT.md` + `plan.md`
 - **Phase 3 (Momus)**: Loops with `@j.plan-reviewer` until OKAY
-- Optional Graphify layer: reads `docs/domain/graphify/GRAPH_REPORT.md` when present, cites at least one relevant god node in Phase 1, and falls back to normal research when Graphify is disabled, stale, or missing.
 
 ### @j.plan-reviewer
 Internal to planner. Executability gate — approval bias, max 3 issues.
@@ -79,7 +66,6 @@ Writes canonical state to `docs/specs/{slug}/state/**` and records approved task
 Amend-on-resume: if a commit for the current task already exists (interrupted attempt), uses `--amend` to maintain exactly one commit per task.
 Does NOT auto-invoke `j.validator` — validation is handled by explicit validator tasks in the plan.
 Repo-wide checks happen after implementer exits.
-- Optional Graphify layer: may consult `GRAPH_REPORT.md` or `graphify path` CLI for task-scoped read-time coupling hints, but never widens scope based on Graphify alone.
 
 ### @j.validator
 Reads spec and full `CONTEXT.md` BEFORE code. BLOCK / FIX / NOTE / APPROVED.
@@ -87,11 +73,9 @@ Can fix FIX-tier issues directly. Writes per-task audit trail to `docs/specs/{sl
 
 ### @j.reviewer
 Detailed read-only reviewer. Used via `/j.pr-review` and by `/j.check` to generate actionable follow-up findings.
-- Optional Graphify layer: Pass 2 may use `GRAPH_REPORT.md` plus `graphify explain` CLI for cross-domain edge review; missing Graphify is a NOTE, not a defect.
 
 ### @j.checker
 Full quality-gate orchestrator. Runs `.opencode/scripts/check-all.sh`, delegates multi-pass review to `@j.reviewer`, persists `check-review.md`, and returns reentry guidance for `@j.implementer`.
-- Optional Graphify layer: passes `GRAPH_REPORT.md` summary to `@j.reviewer` when available and never persists raw `graph.json`.
 
 ### @j.unify
 Closes the loop according to `juninho-config.json` under `workflow`.
@@ -100,7 +84,6 @@ Can update docs, create one gated doc-sync commit, cleanup integrated task bookk
 ### @j.explore
 Fast read-only codebase research. Spawned by planner Phase 1.
 Maps files, patterns, and constraints before the developer interview.
-- Optional Graphify layer: consults `GRAPH_REPORT.md` and `graphify query` CLI before broad grep for god nodes/coupling hotspots, then confirms with normal code search.
 
 ### @j.test-writer
 Writes and fixes unit and controller tests following org conventions (JUnit5, Mockito-Kotlin, AAA/given-when-then). Write access to test files only. Never modifies implementation code — reports bugs found during test writing.
@@ -108,7 +91,6 @@ Writes and fixes unit and controller tests following org conventions (JUnit5, Mo
 ### @j.librarian
 External docs and OSS research. Spawned by planner Phase 1.
 Fetches official API docs via Context7 MCP.
-- Optional Graphify layer: during `/j.unify` refresh, summarizes `GRAPH_REPORT.md` diffs before doing new web research.
 
 ## Context Tiers
 
@@ -117,7 +99,7 @@ Fetches official API docs via Context7 MCP.
 | 1 | Hierarchical `AGENTS.md` + `j.directory-agents-injector` | Always — per directory when files are read |
 | 2 | `j.carl-inject` — content-aware principles + domain docs | Read time + compaction survival |
 | 3 | `j.skill-inject` — file pattern → SKILL.md | Read/Write around matching files |
-| 4 | `<skills>` declaration in `plan.md` task | Explicit per-task requirement |
+| 4 | `- **Skills**:` line on a `plan.md` task → `j.plan-autoload` injects each declared `SKILL.md` | Task-scoped session start + compaction — fires before the task writes anything, including files it creates from scratch (max 3 skills / 12KB, once per session) |
 | 5 | Session state in `.opencode/state/` + feature state in `docs/specs/{slug}/state/` | Runtime, inter-session, per-task orchestration |
 
 ## Context Layers
@@ -143,10 +125,7 @@ Termination is governed by these sensors, never by model confidence.
 | `j.directory-agents-injector` | Read | Inject directory-scoped AGENTS.md files (Tier 1) |
 | `j.env-protection` | Any tool | Block sensitive file reads/writes |
 | `j.auto-format` | Write/Edit | Auto-format after file changes |
-| `j.plan-autoload` | Read + compaction | Inject active plan into context |
-| `j.state-paths` | Shared helper | Resolve global session state files |
-| `j.feature-state-paths` | Shared helper | Resolve feature-local state files |
-| `j.juninho-config` | Shared helper | Load `juninho-config.json` with workflow defaults |
+| `j.plan-autoload` | chat.message + Read + compaction | Inject active plan (task section only for task-scoped sessions) plus the `SKILL.md` of every skill the task declares on its `- **Skills**:` line |
 | `j.task-runtime` | Task spawn + session created | Persist task/session runtime metadata |
 | `j.task-board` | Tool after + compaction | Append per-task board from feature state |
 | `j.notify` | Session idle | Non-blocking local notification on stalls/idleness |
@@ -158,9 +137,7 @@ Termination is governed by these sensors, never by model confidence.
 | `j.comment-checker` | Write/Edit | Flag obvious/redundant comments |
 | `j.memory` | First tool call + compaction | Inject persistent project memory |
 
-Optional Graphify plugin layer (when present in this repo's `.opencode/plugins/`):
-- `j.graphify-inject` should inject only a short `GRAPH_REPORT.md` summary, never `graph.json`
-- `j.graphify-stale-warn` should emit non-blocking freshness/cache warnings only
+Shared helpers live in `.opencode/lib/` and are imported by the plugins above — they are not plugins and are not auto-discovered: `j.juninho-config` (load config with workflow defaults), `j.skill-map` (pattern → skill resolution, project > context > workspace), `j.state-paths` (global session state), `j.feature-state-paths` (feature-local state), `j.workspace-paths` (active-plan/project roots), `j.tool-compat` (tool-name/arg normalization across opencode's tool contract).
 
 ## Custom Tools
 
@@ -173,29 +150,23 @@ Optional Graphify plugin layer (when present in this repo's `.opencode/plugins/`
 | `lsp_find_references` | All usages of a symbol across the codebase |
 | `lsp_prepare_rename` | Validate rename safety |
 | `lsp_rename` | Rename symbol atomically across workspace |
-| `lsp_symbols` | File outline or workspace symbol search |
+| `lsp_document_symbols` | File outline |
+| `lsp_workspace_symbols` | Workspace-wide symbol search |
 | `ast_grep_search` | Structural code pattern search |
 | `ast_grep_replace` | Structural pattern replacement (with dryRun) |
-| `getGraphifyPath` | Shared helper resolving target-local `docs/domain/graphify` output paths |
-
-Optional Graphify CLI layer (requires `graphify` installed via `uv tool install graphifyy`):
-- `graphify query "<question>" --graph <path>` for god nodes, hotspots, and dependency-heavy areas
-- `graphify path "A" "B" --graph <path>` for scoped path tracing between known files/symbols
-- `graphify explain "X" --graph <path>` for cross-domain edge inspection
-- Always prefer `docs/domain/graphify/GRAPH_REPORT.md` over raw `graph.json` in agent prompts and reports
-- If Graphify is disabled, stale, or missing, fall back to grep/Glob and LSP
 
 ## Skills (injected automatically by file pattern)
 
+Workspace layer — `.opencode/skill-map.json`. Each context adds its own layer (`{context}/agent-context/skill-map.json`, e.g. the 17 measured Kotlin skills under `olxbr/`), and project > context > workspace decides who wins. `bun run skills:list` prints every layer.
+
 | Skill | Activates on | Notes |
 |-------|-------------|-------|
-| `j.test-writing` | `*.test.ts`, `*.spec.ts` | Jest/Vitest AAA pattern |
 | `j.agents-md-writing` | `**/AGENTS.md` | Directory-local agent guidance |
 | `j.domain-doc-writing` | `docs/domain/**/*.md` | Business behavior and sync markers |
-| `j.graphify-usage` | `docs/domain/graphify/**`, Graphify-aware agents/commands | Safe use of `GRAPH_REPORT.md`, `graphify query`, `graphify path`, and `graphify explain` |
-| `j.planning-artifact-writing` | `docs/specs/**/{spec,CONTEXT,plan}.md` + workflow prompts | Durable context and ambiguity-free plans |
-| `j.principle-doc-writing` | `docs/principles/**` | Cross-cutting technical rules |
-| `j.shell-script-writing` | `.opencode/scripts/**/*.sh`, `scripts/**/*.sh`, hooks | Fast, safe automation scripts |
+| `j.planning-artifact-writing` | `docs/specs/{slug}/{spec,CONTEXT,plan}.md` + the `j.*` planning/implementing agent and command prompts | Durable context and ambiguity-free plans |
+| `j.principle-doc-writing` | `docs/principles/**/*.md` + `docs/principles/manifest` | Cross-cutting technical rules and their manifest entries |
+| `j.shell-script-writing` | `.opencode/scripts/**/*.sh`, `scripts/**/*.sh`, `pre-commit` hooks | Fast, safe automation scripts |
+| `skill-creator` | `.opencode/skills/*/SKILL.md`, `.opencode/skill-map.json`, skill/behavioral evals | Authoring and measuring skills themselves |
 
 ## State Files
 

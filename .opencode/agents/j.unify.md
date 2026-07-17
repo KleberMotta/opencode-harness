@@ -91,33 +91,10 @@ For each write target (`$REPO_ROOT`):
 Read `$REPO_ROOT/docs/domain/INDEX.md`.
 Update the Keywords and Files entries to reflect any new or changed domain documentation.
 
-### Step 5.25 — Refresh Graphify (if enabled)
-
-This step is controlled by `workflow.unify.refreshGraphify` and defaults to `false`.
-It runs after documentation/domain-index updates and before Step 5.5 Commit Doc Updates so any refreshed `docs/domain/graphify/**` files are folded into the same doc-sync commit.
-
-When disabled:
-- Do not run Graphify refresh.
-- Report that Graphify refresh was intentionally skipped.
-
-When enabled:
-- Read `workflow.graphify.enabled` and `workflow.graphify.outputDir` from `juninho-config.json`.
-- If Graphify itself is disabled, report a skip and continue.
-- If the target repo has no prior Graphify output or `graph.json` is missing, report a skip and continue.
-- Run the incremental refresh from the harness root with the target repo explicit, for example:
-
-```bash
-npm run graphify:refresh -- --repo "$REPO_ROOT" --incremental
-```
-
-- Do not use `--watch`, install hooks, or create pre-commit automation here.
-- Do not create a standalone Graphify commit. Any resulting changes under `docs/domain/graphify/**` must flow into Step 5.5's single doc-sync commit when that step is enabled.
-- If refresh fails because Graphify is unavailable or the repo is not bootstrapped yet, report the skip/failure clearly and continue the rest of UNIFY unless the caller explicitly asked to block on Graphify.
-
 ### Step 5.5 — Commit Doc Updates (if enabled)
 
 This step is controlled by `workflow.unify.commitDocUpdates` and defaults to `true`.
-It runs after documentation/domain-index updates plus optional Graphify refresh, and before cleanup or feature-state artifact commits.
+It runs after documentation/domain-index updates, and before cleanup or feature-state artifact commits.
 
 When disabled:
 - Do not commit documentation changes.
@@ -127,7 +104,6 @@ When enabled:
 - Ensure the current branch is `feature/{feature-slug}` before staging anything.
 - For each write target, detect changed files with `git diff --name-only` plus untracked files.
 - Stage only eligible documentation files from this allowlist:
-  - `docs/domain/graphify/**`
   - `docs/**`
   - `AGENTS.md`
   - `*/AGENTS.md`
