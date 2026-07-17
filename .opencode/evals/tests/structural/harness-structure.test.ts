@@ -333,7 +333,27 @@ describe("harness structural contracts", () => {
 
     expect(planner).toContain("Local integration validation script rule")
     expect(validator).toContain("execute those exact `python3 scripts/...` commands")
-    expect(reviewer).toContain("Integration validation uses local scripts")
+    expect(reviewer).toContain("Integration validation reuses scripts deliberately")
+  })
+
+  test("runtime validation scripts require discovery and developer choice", () => {
+    const root = repoRoot()
+    const planner = readFileSync(path.join(root, ".opencode/agents/j.planner.md"), "utf-8")
+    const reviewer = readFileSync(path.join(root, ".opencode/agents/j.plan-reviewer.md"), "utf-8")
+    const planningSkill = readFileSync(
+      path.join(root, ".opencode/skills/j.planning-artifact-writing/SKILL.md"),
+      "utf-8"
+    )
+
+    for (const content of [planner, reviewer, planningSkill]) {
+      expect(content).toContain("same endpoint, workflow, or runtime fixture")
+      expect(content).toContain("create a separate")
+    }
+
+    expect(planner).toContain("ask the developer whether to update that script")
+    expect(planningSkill).toContain("ask the developer whether to update it")
+    expect(reviewer).toContain("the planner asks the developer whether to update it")
+    expect(planner).toContain("Record the candidates and coverage gaps in `CONTEXT.md`")
   })
 
   test("spec and plan entrypoints cannot recurse into their worker agents", () => {

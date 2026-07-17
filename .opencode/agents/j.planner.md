@@ -168,7 +168,7 @@ financial-api is a `writeTarget` — not a footnote in the partner-api plan.
 
 **Implementation-pattern binding rule**: Every task that introduces a client, service, repository, controller, DTO, entity, migration, listener, mapper, event, or test must name the canonical pattern/file to follow or explicitly say no local pattern exists. Do not ask implementers to infer patterns from broad directories.
 
-**Local integration validation script rule**: The plan's mandatory final task generates the feature-wide validation script at `scripts/validate_{feature_slug}.py` in each target repo. This script owns the end-to-end validation scenarios for the implementation, accepts runtime configuration through CLI args or environment variables, prints a clear scenario summary, and exits non-zero on failure. The final task is only COMPLETE when the script executes successfully. Intermediate tasks may create or update helper scripts during development, but the canonical validation entry-point is always `scripts/validate_{feature_slug}.py` produced by the last task.
+**Local integration validation script rule**: Before planning a new feature-wide validation script, inspect the target repo's `scripts/` directory and read every candidate that already exercises the same endpoint, workflow, or runtime fixture. Record the candidates and coverage gaps in `CONTEXT.md`. If an existing script can cover the feature by being extended, ask the developer whether to update that script or create a separate feature-specific script; do not decide unilaterally. Only plan `scripts/validate_{feature_slug}.py` after the developer explicitly chooses a new script, or when no existing script covers the same endpoint/context. The selected script owns the end-to-end scenarios, accepts runtime configuration through CLI args or environment variables, prints a clear scenario summary, and exits non-zero on failure. The final task is only COMPLETE when the selected script executes successfully.
 
 **File-level specificity rule**: Each task's Files section must list the exact files to create or modify — not directories, not wildcards, not "related files". If the file doesn't exist yet, include the full path where it will be created.
 
@@ -299,16 +299,18 @@ Use a dedicated `j.test-writer` task when the plan concentrates meaningful test-
 - `CONTEXT.md#Test-and-Build-Policy`
 
 ### Files
-- `scripts/validate_{feature_slug}.py`
+- `{selected existing script path}` or `scripts/validate_{feature_slug}.py`
 - `docs/specs/{feature-slug}/pr-{project-label}.md`
 
 ### Action
-- Create `scripts/validate_{feature_slug}.py` that:
+- Before creating a script, inspect `scripts/` for candidates that already validate the same endpoint, workflow, or runtime fixture. Record each candidate and the missing scenarios in `CONTEXT.md`.
+- If a candidate exists, ask the developer whether to extend it or create a separate script. Do not create a new script until that choice is explicit.
+- Update the selected existing script, or create `scripts/validate_{feature_slug}.py` only when no candidate exists or the developer chose a separate script. The selected script must:
   - Spins up required dependencies (docker-compose, test DB, mock servers) or fails with clear instructions
   - Validates the full implementation through key end-to-end scenarios
   - Accepts configuration via CLI args / env vars
   - Prints clear scenario summary and exits 0 on success, non-zero on failure
-- Run the script: `python3 scripts/validate_{feature_slug}.py` — the task is only COMPLETE if the script passes
+- Run the selected script with its exact `python3 scripts/...` command — the task is only COMPLETE if it passes
 - Read `.github/PULL_REQUEST_TEMPLATE.md` if it exists and use its structure
 - Write `docs/specs/{feature-slug}/pr-{project-label}.md` with:
   - Feature summary and goal from spec/plan
@@ -317,7 +319,7 @@ Use a dedicated `j.test-writer` task when the plan concentrates meaningful test-
   - Breaking changes if any
 
 ### Verification
-- `python3 scripts/validate_{feature_slug}.py` exits 0
+- The selected `python3 scripts/...` command exits 0
 - `docs/specs/{feature-slug}/pr-{project-label}.md` exists and follows PR template
 
 ### Done Criteria
@@ -349,17 +351,17 @@ Minimum task detail:
 - The frequency is at the planner's discretion based on feature complexity and risk
 
 **Final task rule (mandatory)**: The very last task of every plan MUST be an implementation task (`j.implementer`) that:
-1. Generates a Python validation script at `scripts/validate_{feature_slug}.py` in each write target repo. The script must:
+1. Inspects each write target's `scripts/` directory for a script that already validates the feature's endpoint, workflow, or runtime fixture. The planner records the candidate scripts and coverage gaps in `CONTEXT.md`. If a candidate exists, the planner asks the developer whether to extend it or create a separate script before finalizing the plan. The final task updates the developer-selected existing script, or creates `scripts/validate_{feature_slug}.py` only when no candidate exists or the developer explicitly chooses a separate script. The selected script must:
    - Be fully self-contained: spin up any required dependencies (docker-compose, test databases, mock servers) or clearly fail with instructions
    - Execute the feature's key scenarios end-to-end and print a clear pass/fail summary
    - Accept runtime configuration via CLI args or environment variables
    - Exit 0 on success, non-zero on failure
-   - The task is only COMPLETE if the script runs successfully and validates the implementation
+   - The task is only COMPLETE if the selected script runs successfully and validates the implementation
 2. Generates a PR description markdown file at `docs/specs/{feature-slug}/pr-{project-label}.md` for each write target. The PR description must:
    - Follow the project's `.github/PULL_REQUEST_TEMPLATE.md` structure if one exists, otherwise use a standard format (Summary, Changes, Testing, Breaking Changes)
    - Reference the spec/plan slug and summarize the feature goal
    - List all tasks implemented and their commit SHAs
-   - Include the validation script command and its output summary as test evidence
+   - Include the selected validation script command and its output summary as test evidence
    - For multi-repo features, produce one PR description per write target project
 
 ---
