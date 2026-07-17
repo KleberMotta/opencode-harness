@@ -24,7 +24,7 @@ Activate high-throughput mode — work until all tasks in the plan are complete.
     - Retry budget is tracked per task in `tasks/task-{id}/retry-state.json`
 11. If `workflow.implement.watchdogSessionStale` is enabled and a task never starts or goes stale, the loop may launch one retry attempt for that task
 12. If `workflow.implement.watchdogSessionStale` is enabled, a watchdog notification may surface stalled sessions without blocking the run
-13. `@j.validator` runs after each task, writing results to `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/tasks/task-{id}/validator-work.md`
+13. Validation happens only via explicit `j.validator` tasks placed in the plan by the planner (no auto-validation after each task); validator tasks write results to `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/tasks/task-{id}/validator-work.md`
 14. Loop continues until all tasks across all write targets are marked complete
 15. Record each APPROVED task commit in `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
 16. Run `/j.check` once task-level work is done; this must validate the canonical plan branch in every target repo
@@ -55,7 +55,7 @@ Wave 3:
 ## Safety
 
 - Each task gets a fresh task-scoped subagent session
-- All state files go to repo root, so the orchestrator always has visibility
+- All state files go to the workspace root (`$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/`), so the orchestrator always has visibility
 - Shared-branch execution keeps commit history linear and predictable
 - Each task carries its own lease in feature-local state; heartbeat-only file updates are opt-in
 - Stale tasks can be retried once without allowing two attempts to commit concurrently

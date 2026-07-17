@@ -25,7 +25,7 @@ Otherwise:
 Run via the Bash tool with `workdir="$REPO_ROOT"`:
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/lint-structure.sh
+sh "$WORKSPACE_ROOT/.opencode/scripts/lint-structure.sh"
 ```
 
 The script is workspace-safe: it refuses to operate on the workspace git unless `ALLOW_WORKSPACE_GIT=1`.

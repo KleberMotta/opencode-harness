@@ -14,7 +14,7 @@ Creating or editing Graphify artifacts under `docs/domain/graphify/`, wiring Gra
 3. Use `graphify path "A" "B" --graph <path>` only between already-known files or symbols inside the current task scope.
 4. Use `graphify explain "X" --graph <path>` for suspicious cross-domain edges or non-obvious dependencies.
 5. Keep Graphify findings short and task-relevant; summarize, do not dump raw artifacts.
-6. Confirm any concrete code conclusion with Read, Glob, Grep, LSP, or context-mode before editing code.
+6. Confirm any concrete code conclusion with Read, Glob, Grep, or LSP before editing code.
 7. Fall back cleanly when Graphify is disabled, stale, missing, or `graph.json` does not exist.
 
 ## CLI Equivalents

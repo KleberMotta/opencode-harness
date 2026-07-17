@@ -1,9 +1,10 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync, statSync } from "fs"
 import path from "path"
-import { featureStateManifestPath, featureStateTaskPaths } from "./j.feature-state-paths"
-import { resolveStateFile } from "./j.state-paths"
-import { loadActivePlanTargets } from "./j.workspace-paths"
+import { featureStateManifestPath, featureStateTaskPaths } from "../lib/j.feature-state-paths"
+import { resolveStateFile } from "../lib/j.state-paths"
+import { loadActivePlanTargets } from "../lib/j.workspace-paths"
+import { toolIs } from "../lib/j.tool-compat"
 
 type TaskBoardRow = {
   id: string
@@ -38,11 +39,16 @@ function markdownField(body: string, name: string): string {
   return body.match(new RegExp("^-\\s+\\*\\*" + escapedName + "\\*\\*:\\s*([^\\n]+)", "im"))?.[1]?.replace(/`/g, "").trim() ?? ""
 }
 
+const planCache = new Map<string, { mtimeMs: number; tasks: Array<{ id: string; name: string; wave: string; depends: string }> }>()
+
 function parsePlan(planPath: string): Array<{ id: string; name: string; wave: string; depends: string }> {
   if (!existsSync(planPath)) return []
+  const mtimeMs = statSync(planPath).mtimeMs
+  const cached = planCache.get(planPath)
+  if (cached && cached.mtimeMs === mtimeMs) return cached.tasks
   const content = readFileSync(planPath, "utf-8")
   const markdownTasks = Array.from(content.matchAll(/^##\s+Task\s+([A-Za-z0-9_-]+)\b(?:\s+[—:-]\s*([^\n]+))?[^\n]*$/gm))
-  return markdownTasks.map((match) => {
+  const tasks = markdownTasks.map((match) => {
     const bodyStart = (match.index ?? 0) + match[0].length
     const nextHeading = markdownTasks.find((candidate) => (candidate.index ?? 0) > (match.index ?? 0))
     const body = content.slice(bodyStart, nextHeading?.index ?? content.length)
@@ -53,6 +59,8 @@ function parsePlan(planPath: string): Array<{ id: string; name: string; wave: st
       name: match[2]?.trim() || markdownField(body, "Name") || "Task " + match[1],
     }
   })
+  planCache.set(planPath, { mtimeMs, tasks })
+  return tasks
 }
 
 function readStateValue(content: string, label: string): string {
@@ -62,17 +70,24 @@ function readStateValue(content: string, label: string): string {
 function readRetryCount(retryPath: string): string {
   if (!existsSync(retryPath)) return "0"
   try {
-    const parsed = JSON.parse(readFileSync(retryPath, "utf-8")) as { autoRetryCount?: number }
-    return typeof parsed.autoRetryCount === "number" ? String(parsed.autoRetryCount) : "0"
+    // j.task-runtime writes automaticRetriesUsed; autoRetryCount is the legacy field name.
+    const parsed = JSON.parse(readFileSync(retryPath, "utf-8")) as { automaticRetriesUsed?: number; autoRetryCount?: number }
+    const count = parsed.automaticRetriesUsed ?? parsed.autoRetryCount
+    return typeof count === "number" ? String(count) : "0"
   } catch {
     return "0"
   }
 }
 
-function buildBoardForTarget(projectRoot: string, slug: string, projectLabel: string): string | null {
-  const featureDir = path.join(projectRoot, "docs", "specs", slug)
-  const planPath = path.join(featureDir, "plan.md")
-  const integrationPath = featureStateManifestPath(projectRoot, slug)
+// Specs and feature state are centralized in the workspace root, not in target
+// repos — the board reads state from workspaceRoot regardless of write target.
+// The plan itself falls back to the target-declared planPath for legacy
+// layouts where plan.md still lives in the target repo.
+function buildBoardForTarget(workspaceRoot: string, slug: string, projectLabel: string, fallbackPlanPath?: string): string | null {
+  const featureDir = path.join(workspaceRoot, "docs", "specs", slug)
+  const workspacePlanPath = path.join(featureDir, "plan.md")
+  const planPath = existsSync(workspacePlanPath) || !fallbackPlanPath ? workspacePlanPath : fallbackPlanPath
+  const integrationPath = featureStateManifestPath(workspaceRoot, slug)
   if (!existsSync(planPath)) return null
 
   const planTasks = parsePlan(planPath)
@@ -88,7 +103,7 @@ function buildBoardForTarget(projectRoot: string, slug: string, projectLabel: st
   }
 
   const rows: TaskBoardRow[] = planTasks.map((task) => {
-    const taskPaths = featureStateTaskPaths(projectRoot, slug, task.id)
+    const taskPaths = featureStateTaskPaths(workspaceRoot, slug, task.id)
     const content = existsSync(taskPaths.statePath) ? readFileSync(taskPaths.statePath, "utf-8") : ""
     const integrationEntry = integrationManifest?.tasks?.[task.id]
 
@@ -124,17 +139,20 @@ function buildBoard(directory: string): string | null {
   const boards: string[] = []
   const visited = new Set<string>()
 
-  // Multi-target: iterate active-plan write targets.
+  // Multi-target: the plan and state are centralized per slug, so multiple
+  // write targets sharing a slug produce a single board.
   const activeTargets = loadActivePlanTargets(directory)
   for (const target of activeTargets) {
     const projectRoot = target.targetRepoRoot
     const slug = target.slug ?? slugFromPlanPath(target.planPath) ?? undefined
     if (!projectRoot || !slug) continue
-    const key = projectRoot + "::" + slug
-    if (visited.has(key)) continue
-    visited.add(key)
+    if (visited.has(slug)) continue
+    visited.add(slug)
     const projectLabel = target.project ?? path.basename(projectRoot)
-    const board = buildBoardForTarget(projectRoot, slug, projectLabel)
+    const fallbackPlanPath = target.planPath
+      ? path.isAbsolute(target.planPath) ? target.planPath : path.join(projectRoot, target.planPath)
+      : undefined
+    const board = buildBoardForTarget(directory, slug, projectLabel, fallbackPlanPath)
     if (board) boards.push(board)
   }
 
@@ -159,6 +177,10 @@ export default (async ({ directory }: { directory: string }) => {
       input: { tool: string; sessionID: string; callID: string; args: any },
       output: { title: string; output: string; metadata: any }
     ) => {
+      // Task state only changes around task delegation, file writes, and
+      // git/script runs — skip pure reads/searches to avoid per-call fs I/O.
+      if (!toolIs(input.tool, "task", "write", "edit", "bash")) return
+
       const board = buildBoard(directory)
       if (!board) return
       if (lastBoardBySession.get(input.sessionID) === board) return

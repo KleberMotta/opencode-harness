@@ -1,6 +1,7 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { execSync } from "child_process"
 import path from "path"
+import { argFilePath, toolIs } from "../lib/j.tool-compat"
 
 // Auto-formats files after Write/Edit tool calls.
 // Real API: tool.execute.after(input, output) — input.args has the file path.
@@ -24,9 +25,9 @@ export default (async ({ directory: _directory }: { directory: string }) => ({
     input: { tool: string; sessionID: string; callID: string; args: any },
     _output: { title: string; output: string; metadata: any }
   ) => {
-    if (!["Write", "Edit", "MultiEdit"].includes(input.tool)) return
+    if (!toolIs(input.tool, "write", "edit")) return
 
-    const filePath: string = input.args?.path ?? input.args?.file_path ?? ""
+    const filePath = argFilePath(input.args)
     if (!filePath) return
 
     const formatter = FORMATTERS[path.extname(filePath)]

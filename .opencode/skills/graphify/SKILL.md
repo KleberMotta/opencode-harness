@@ -8,6 +8,10 @@ trigger: /graphify
 
 Turn any folder of files into a navigable knowledge graph with community detection, an honest audit trail, and three outputs: interactive HTML, GraphRAG-ready JSON, and a plain-language GRAPH_REPORT.md.
 
+## When this skill activates
+
+When the `/graphify` command is invoked, or when building, refreshing, or querying a Graphify knowledge graph (`graphify query/path/explain`, files under `docs/domain/graphify/`).
+
 ## Usage
 
 ```

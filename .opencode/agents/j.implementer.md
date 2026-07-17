@@ -12,7 +12,7 @@ Your scope ends when the planned code changes, task-level tests, and any previou
 All feature spec artifacts (spec.md, plan.md, CONTEXT.md) and implementation state live in the **workspace root**, not in each target repo:
 
 ```bash
-WORKSPACE_ROOT="/Users/kleber.motta/repos"
+WORKSPACE_ROOT="{the opencode project directory — where opencode was launched and where the .opencode/ harness lives; never hardcode a machine-specific path}"
 SPEC_ROOT="$WORKSPACE_ROOT/docs/specs/{feature-slug}"
 STATE_ROOT="$WORKSPACE_ROOT/docs/specs/{feature-slug}/state"
 ```
@@ -70,8 +70,8 @@ Hard rules:
 5. If multi-target and you are the workflow owner:
    - enumerate all `writeTargets` from `.opencode/state/active-plan.json`
    - for each target, normalize `planPath`, `specPath`, and `contextPath` to absolute paths using `targetRepoRoot` when needed
-   - read that target project's absolute `planPath`
-   - read that target project's absolute `specPath` if it exists
+   - consult the plan content already injected in your context by the harness (plan-autoload); read the absolute `planPath` from disk only when the plan is not present in context
+   - read that target project's absolute `specPath` if it exists and is a different file from `contextPath`
    - read that target project's absolute `contextPath` fully; if it is missing for a planned feature, stop and report a plan/context defect
    - read absolute state paths under `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/`, including `implementer-work.md`, `check-review.md`, `check-all-output.txt`, `functional-validation-plan.md`, and `integration-state.json` when they exist
    - use those target-local artifacts to detect COMPLETE tasks and skip already-finished work on rerun
@@ -132,8 +132,8 @@ Commit policy:
 At the start of the feature run, ensure the canonical branch and manifest exist (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh ensure "{feature-slug}" "$CURRENT_BRANCH"
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch "{feature-slug}"
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" ensure "{feature-slug}" "$CURRENT_BRANCH"
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" switch "{feature-slug}"
 ```
 
 Before any code edits, the task executor must write task state with:
@@ -182,10 +182,12 @@ Ownership and takeover rules:
 - When taking over, increment `Attempt`, set `Retry of` to the previous attempt, and append the takeover reason to `implementer-work.md`.
 - If task state shows `Status: IN_PROGRESS` and a fresh heartbeat from another active attempt, do not duplicate work.
 
-Before COMMIT and before writing final task state, re-read your own task state file.
+When `workflow.implement.watchdogSessionStale` is enabled, re-read your own task state file once immediately before COMMIT (concurrent retry attempts may exist):
 
 - If the task file shows a newer `Attempt` than yours, stop immediately.
 - If the task file is no longer `IN_PROGRESS`, stop instead of writing competing results.
+
+When the watchdog is disabled there are no concurrent attempts — skip these defensive re-reads.
 
 ## Single Task Mode
 
@@ -215,6 +217,8 @@ For each write target, then for each wave in that target's plan:
 
 - Tasks in the same wave may be independent in the plan, but this harness still commits them sequentially on the shared branch.
 - Spawn a dedicated `j.implementer` child per task with an explicit prompt that starts with `Execute task {id}`.
+- If the plan task declares `- **Agent**: j.validator` or `- **Agent**: j.test-writer`, you MUST spawn that agent via the `task` tool for the task — passing the same `Execute task {id}` prompt and task contract. NEVER execute a validator or test-writer task yourself, in any mode (including singleTaskMode): the separation between the implementer's work and the validator's independent judgment is the point of the task.
+- Validator tasks produce NO implementation commit: they write `validator-work.md` and their own `execution-state.md` only. Skip COMMIT and `record-task`/`integrate-task` bookkeeping for tasks whose `Agent:` is `j.validator`, unless the plan explicitly lists deliverable files for that task.
 - Every task-worker prompt MUST include explicit target-local contract lines:
   - `Target Project: {project label}`
   - `Target Repo Root: {absolute repo root}`
@@ -242,13 +246,18 @@ Retry behavior:
 
 ### READ
 
+Context economy rules (apply to every step below):
+
+- The harness injects the active plan (full plan for the owner; your task's section for task-scoped workers) via plan-autoload. Never re-read from disk what is already injected in your context.
+- If `specPath` and `contextPath` resolve to the same file, read it once and treat that single read as covering both steps 1 and 2.
+
 1. Read `spec.md` first if it exists, otherwise the plan goal and current task done criteria.
 2. Read the full `CONTEXT.md` immediately after `spec.md` and before task files. Treat it as authoritative for business intent, identifier mappings, existing patterns, integration contracts, constraints, anti-patterns, and resolved unknowns.
    - If `CONTEXT.md` is absent or too thin to resolve a task ambiguity, stop and report a plan/context defect instead of guessing.
    - If the task conflicts with `CONTEXT.md`, stop and report the contradiction.
 3. Read the target repo `AGENTS.md` and any nested `AGENTS.md` that applies to task files.
 4. Read build/test configuration files that define executable test scope, such as `pom.xml`, Gradle files, Jest/Vitest config, Makefile, or package scripts.
-5. Read `state/implementer-work.md` if it exists.
+5. If `state/implementer-work.md` exists, read only the tail (last ~60 lines) plus any entries mentioning your task's `depends` ids — never the whole log; it grows linearly with completed tasks.
 6. Read the current plan task, especially `### Context References`, `### Files`, `### Action`, `### Verification`, `### Done Criteria`, and `Depends`.
 7. Read dependency execution/validator state for each task in `depends`.
 8. If resuming, read the current task's execution state and validator log first.
@@ -323,7 +332,6 @@ Rules:
 
 - Do not include feature state artifacts in the task commit unless they are explicitly part of the task's deliverable files.
 - Do not create a follow-up commit for state, validator, bookkeeping, formatting metadata, or other `docs/specs/{feature-slug}/state/**` artifacts.
-- Re-read your task state lease before `git add` and before `git commit`.
 - If the hook fails, fix the issue and repeat from ACT/STATE.
 - Do not bypass hooks.
 
@@ -359,8 +367,8 @@ Append the final task result to `implementer-work.md`.
 Then record the task commit (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh record-task "{feature-slug}" "{id}" "$VALIDATED_COMMIT" "{attempt number}" "{task description}"
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh integrate-task "{feature-slug}" "{id}"
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" record-task "{feature-slug}" "{id}" "$VALIDATED_COMMIT" "{attempt number}" "{task description}"
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" integrate-task "{feature-slug}" "{id}"
 ```
 
 `record-task` arguments are: `<feature-slug> <task-id> <validated-commit> <attempt> [label]`. It resets task integration bookkeeping to `pending`; `integrate-task` then records how that commit landed on `feature/{feature-slug}`.
@@ -402,13 +410,13 @@ When all tasks in all waves are complete for all write targets (or when `singleT
 2. Ensure the current branch is `feature/{feature-slug}` (run via the Bash tool with `workdir="$REPO_ROOT"`):
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch "{feature-slug}"
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" switch "{feature-slug}"
 ```
 
 3. Update `.opencode/state/execution-state.md` only as local session state if still used by the workflow.
 4. Exit cleanly and report:
    - task-level implementation is complete
-   - the caller should run `sh /Users/kleber.motta/repos/.opencode/scripts/check-all.sh` (with `workdir="$REPO_ROOT"`) or `/j.check` from the canonical feature branch
+   - the caller should run `sh "$WORKSPACE_ROOT/.opencode/scripts/check-all.sh"` (with `workdir="$REPO_ROOT"`) or `/j.check` from the canonical feature branch
    - if the repo-wide check fails, invoke `@j.implementer` again with the failing output
 
 Do NOT create task branches, arbitrary merges, or PRs.

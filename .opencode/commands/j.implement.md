@@ -74,7 +74,7 @@ When ANY sub-agent returns output:
 
 ## After implementation
 
-Run `/j.check` for repo-wide verification.
+Run `/j.check` for repo-wide verification only when **all** tasks in the plan are COMPLETE and `workflow.implement.postImplementFullCheck` is `true`. In `singleTaskMode`, do NOT run `/j.check` after each individual task — the full check (formatting + complete test suite) is expensive and belongs at the end of the feature, or when the developer explicitly asks for it.
 If `/j.check` fails, invoke `/j.implement` again with the failing output and `check-review.md`.
 Treat the `## Reentry Contract` section inside `check-review.md` as the authoritative next-action contract when it is present.
 If the correction applies to already completed work, create a new follow-up task first and implement that task forward-only.

@@ -23,7 +23,7 @@ Otherwise:
 Run via the Bash tool with `workdir="$REPO_ROOT"`:
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/test-related.sh
+sh "$WORKSPACE_ROOT/.opencode/scripts/test-related.sh"
 ```
 
 If the repository defines `test:related`, that script is preferred. Otherwise the default fallback tries tools such as `jest --findRelatedTests` or `vitest related`.

@@ -63,20 +63,33 @@ In this mode, `/j.finish-setup` must resolve the **target project root** before 
    - no business-domain detail that belongs in `docs/domain/*`
    - commands must match the actual repository scripts and build tools
 
-### Phase 3 — Generate Dynamic Skills
+### Phase 3 — Generate Dynamic Skills (evidence → synthesis)
 
-7. For each discovered pattern, create a skill in `.opencode/skills/j.{pattern}-writing/SKILL.md` (at the **harness root**, not the project root — skills are shared across projects):
-    - Frontmatter with `name`, `description`
-    - "When this skill activates" with the glob patterns from the project
-    - "Required Steps" extracted from the exemplar file analysis
-    - "Anti-patterns to avoid" based on what the exemplars do NOT do
-    - Canonical example copied/adapted from a real project file
+Conventions are MEASURED, not described: deterministic analyzers emit facts, the LLM only synthesizes on top of them.
+
+7. **Measure first.** Before writing any skill or convention prose, run the deterministic analyzer against the target project:
+   ```
+   sh "$WORKSPACE_ROOT/.opencode/scripts/analyze-conventions.sh" "$PROJECT_ROOT" --json
+   ```
+   Its JSON output (`measure`, `symbols`, `git`, `tests`, `config` — every number carries real `samples`) is the evidence base for this phase. Do not re-derive by eyeballing what the analyzer already measured. An omitted field means "no evidence" — never fill the gap by guessing.
+8. **Evidence-gated synthesis.** For each discovered pattern, create a skill:
+   - **Location** — skills that encode a project's conventions go to the **context layer**: `{context}/agent-context/skills/j.{pattern}-writing/SKILL.md` (e.g. `olxbr/agent-context/skills/`), NOT the workspace `.opencode/skills/`. Only harness-generic skills (rare) stay at the harness root.
+   - Frontmatter with `name`, `description`
+   - "When this skill activates" with the glob patterns from the project
+   - "Required Steps" extracted from the exemplar file analysis
+   - "Anti-patterns to avoid" based on what the exemplars do NOT do
+   - **Evidence rule** (applies to every convention stated in skills AND in the `AGENTS.md` files from Phase 2): a convention may be asserted as a rule only when backed by **≥3 real examples** (analyzer JSON `samples` or exemplar files read in Phase 1), cited next to the rule. Fewer than 3 → mark the statement `[tentative]` and phrase it as an observation, not an instruction. Cross-check convention claims already written into Phase 2 `AGENTS.md` against the analyzer JSON; downgrade unproven ones to `[tentative]`.
+   - **Prose describes, snippets prove:** every pattern claim ships with a real snippet copied from a repo file, with its path. No invented code examples.
+   - Every writing skill MUST end with these two closing sections, in order:
+     - `## RED_LINES` — at least 5 prohibitions anchored in what THIS repo demonstrably avoids (not generic best practices), each with a 1-line justification pointing at the evidence (what the repo does instead, and where).
+     - `## Mimicry Test` — the final self-check: "If an agent followed only this skill, would the code come out mergeable without style fixes?" If the honest answer is no, the skill is missing conventions — go back to the analyzer JSON and the exemplars until the answer is yes.
    - Before finalizing or revising any skill, load and apply the local `skill-creator` skill so the description, trigger criteria, and eval hooks are explicit
-8. Update `.opencode/skill-map.json` (at the harness root) with new regex patterns for each skill
-9. For every created or changed skill, add intelligent eval coverage that proves:
-   - the skill triggers under realistic prompts
-   - near-miss prompts do not trigger it
-   - the skill changes agent behavior on at least one implementation task
+9. Register and prove each skill:
+   - Update the skill map where the skill lives: `{context}/agent-context/skill-map.json` for context-layer skills, `.opencode/skill-map.json` (harness root) for workspace skills — adding new regex patterns for each skill
+   - For every created or changed skill, add intelligent eval coverage that proves:
+     - the skill triggers under realistic prompts
+     - near-miss prompts do not trigger it
+     - the skill changes agent behavior on at least one implementation task
 
 ### Phase 4 — Generate Documentation
 
@@ -135,7 +148,7 @@ When `@j.explore` returns its report:
 
 After completion, the target project will have:
 - Hierarchical `AGENTS.md` files aligned to the real directory structure
-- Custom skills registered in the harness that match the project's file patterns and conventions
+- Custom skills registered in the context layer (`{context}/agent-context/skills/`) — or at the harness root for generic ones — backed by measured evidence from `analyze-conventions.sh`, each ending with `RED_LINES` and the Mimicry Test
 - Domain documentation populated with real business domains at `$PROJECT_ROOT/docs/domain/`
 - Principles documentation reflecting actual codebase patterns at `$PROJECT_ROOT/docs/principles/`
 - Updated local automation stubs and command references

@@ -646,6 +646,8 @@ function seedImplementCommandSandboxVariant(root: string) {
     ].join("\n"),
     "utf-8"
   )
+  // Post-refactor contract: no auto-validation — the plan carries an explicit
+  // j.validator task, exactly as the planner would place it.
   writeFileSync(
     path.join(root, "docs", "specs", "feature-x", "plan.md"),
     markdownPlanTask({
@@ -656,7 +658,47 @@ function seedImplementCommandSandboxVariant(root: string) {
       verification: "Confirm the file exists and declares class FooService.",
       done: "The file exists at the planned path and declares class FooService.",
       contextReference: "`CONTEXT.md#foo-service` — Create only the planned FooService file.",
-    }),
+    }) + [
+      "## Task 2 — Validate FooService",
+      "- **Project**: sandbox",
+      "- **Wave**: 2",
+      "- **Agent**: j.validator",
+      "- **Depends**: 1",
+      "- **Skills**: None",
+      "",
+      "### Context References",
+      "- `CONTEXT.md#foo-service` — Validate only the planned FooService deliverable.",
+      "",
+      "### Files",
+      "- `src/main/kotlin/br/com/olx/trp/financial/FooService.kt`",
+      "",
+      "### Action",
+      "Validate task 1 against the spec and plan: confirm the planned file exists, declares class FooService, and its commit is on feature/feature-x. Write the verdict to docs/specs/feature-x/state/tasks/task-1/validator-work.md using the canonical `## Verdict:` heading.",
+      "",
+      "### Verification",
+      "- validator-work.md for task 1 contains `## Verdict: APPROVED`.",
+      "",
+      "### Done Criteria",
+      "- Validator verdict recorded for task 1.",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+  // Hermetic config: without this the sandbox inherits the machine-level
+  // juninho-config.json via ancestor walk (singleTaskMode=true would stop the
+  // run after task 1 and skip the validator task).
+  writeFileSync(
+    path.join(root, ".opencode", "juninho-config.json"),
+    JSON.stringify(
+      {
+        workflow: {
+          automation: { nonInteractive: true, autoApproveArtifacts: true },
+          implement: { singleTaskMode: false },
+        },
+      },
+      null,
+      2
+    ) + "\n",
     "utf-8"
   )
   writeFileSync(
@@ -683,6 +725,7 @@ function seedImplementCommandSandboxVariant(root: string) {
       "",
       "## Incomplete Tasks",
       "- [ ] Task 1 — Create FooService",
+      "- [ ] Task 2 — Validate FooService",
       "",
     ].join("\n"),
     "utf-8"
@@ -692,6 +735,27 @@ function seedImplementCommandSandboxVariant(root: string) {
 function seedCheckCommandSandboxVariant(root: string) {
   seedImplementCommandSandboxVariant(root)
   mkdirSync(path.join(root, "docs", "specs", "feature-x", "state", "tasks", "task-1"), { recursive: true })
+  // The check scenario starts from a fully implemented feature: the plan's
+  // validator task (task 2) is already COMPLETE.
+  mkdirSync(path.join(root, "docs", "specs", "feature-x", "state", "tasks", "task-2"), { recursive: true })
+  writeFileSync(
+    path.join(root, "docs", "specs", "feature-x", "state", "tasks", "task-2", "execution-state.md"),
+    [
+      "# Task 2 — Execution State",
+      "",
+      "- **Status**: COMPLETE",
+      "- **Feature slug**: feature-x",
+      "- **Wave**: 2",
+      "- **Attempt**: 1",
+      "- **Branch**: feature/feature-x",
+      "- **Depends on**: 1",
+      "",
+      "## Validation Verdict",
+      "APPROVED.",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
   writeFileSync(
     path.join(root, "src", "main", "kotlin", "br", "com", "olx", "trp", "financial", "FooService.kt"),
     "package br.com.olx.trp.financial\n\nclass FooService\n",
@@ -1171,7 +1235,12 @@ function postCheck(result: EvalResult, index: number): string | null {
     if (!controller.includes("REQUEST_ID_HEADER")) return "controller did not reuse REQUEST_ID_HEADER"
     if (!controller.includes("SampleService")) return "controller did not delegate to SampleService"
     if (!skillMarker || !controller.includes(skillMarker)) return "controller did not apply skill-specific marker"
-    if (!result.toolMetrics.skill || result.toolMetrics.skill.count < 1) return "expected controller skill usage"
+    // Skill delivery evidence: either opencode's native skill tool was invoked
+    // or the harness skill-inject plugin injected the SKILL.md into a read.
+    const nativeSkillUsed = Boolean(result.toolMetrics.skill && result.toolMetrics.skill.count >= 1)
+    const transcriptText = existsSync(result.transcriptPath) ? readFileSync(result.transcriptPath, "utf-8") : ""
+    const injectedSkillUsed = transcriptText.includes("[skill-inject] Skill activated for j.controller-writing")
+    if (!nativeSkillUsed && !injectedSkillUsed) return "expected controller skill usage"
     const comparison = compareControllerWithAndWithoutSkill()
     if (comparison) return comparison
     return result.actualAnswer.includes("controller-guidance=used") ? null : "controller guidance outcome missing"

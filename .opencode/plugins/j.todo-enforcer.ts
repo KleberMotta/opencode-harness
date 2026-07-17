@@ -4,6 +4,7 @@ import path from "path"
 import { featureStateDir, featureStateTaskDir } from "../lib/j.feature-state-paths"
 import { resolveStateFile } from "../lib/j.state-paths"
 import { loadActivePlanTargets } from "../lib/j.workspace-paths"
+import { toolIs } from "../lib/j.tool-compat"
 
 // Re-injects incomplete tasks to prevent the agent from forgetting pending work.
 // Three sources of truth (checked in order):
@@ -151,7 +152,7 @@ export default (async ({ directory }: { directory: string }) => ({
     input: { tool: string; sessionID: string; callID: string; args: any },
     output: { title: string; output: string; metadata: any }
   ) => {
-    if (!["Write", "Edit", "MultiEdit"].includes(input.tool)) return
+    if (!toolIs(input.tool, "write", "edit")) return
 
     const incomplete = getIncompleteTasks(directory)
     if (incomplete.length === 0) return

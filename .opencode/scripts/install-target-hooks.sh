@@ -97,8 +97,85 @@ if [ -z "$JUNINHO_STAGED_FILES" ]; then
   exit 0
 fi
 
-# --- Source config reader for toggles ---
+# --- Source config reader for toggles + stack detection helpers ---
 . "$WORKSPACE_ROOT/.opencode/scripts/_read-config.sh"
+. "$WORKSPACE_ROOT/.opencode/scripts/_detect-stack.sh"
+
+# --- Auto-apply formatting to staged files (first-pass compliance) ---
+# Formatting must never fail a commit: the formatter is APPLIED to the
+# fully-staged files before the checks run, and whatever it touched is
+# re-staged. A failed apply never blocks (|| true) — lint-structure right
+# after stays the gate.
+#
+# Limit: partially-staged files (staged AND with unstaged edits on top, e.g.
+# git add -p) are SKIPPED by the auto-format. Formatters work on the working
+# tree, so formatting them would rewrite the dev's unstaged WIP without
+# consent, and re-staging would sweep unstaged hunks into the commit. Those
+# files go through unformatted — the hook warns, and CI may flag them.
+if config_get_workflow_bool implement.autoFixFormatOnCommit true; then
+  STACK="$(detect_stack)"
+  # Partition staged files: a staged file listed by `git diff --name-only`
+  # has unstaged edits (partially staged); the rest are fully staged.
+  __fmt_unstaged="$(git diff --name-only)"
+  __fmt_full=""
+  __fmt_partial=""
+  while IFS= read -r __fmt_f; do
+    [ -z "$__fmt_f" ] && continue
+    if printf '%s\n' "$__fmt_unstaged" | grep -qxF "$__fmt_f"; then
+      __fmt_partial="${__fmt_partial}${__fmt_f}
+"
+    else
+      __fmt_full="${__fmt_full}${__fmt_f}
+"
+    fi
+  done <<JUNINHO_STAGED_EOF
+$JUNINHO_STAGED_FILES
+JUNINHO_STAGED_EOF
+  if [ -n "$__fmt_partial" ]; then
+    __fmt_partial_count="$(printf '%s' "$__fmt_partial" | grep -c .)"
+    echo "[juninho:pre-commit] WARNING: $__fmt_partial_count arquivo(s) parcialmente staged pulados pelo auto-format; o CI pode reprovar formatação:"
+    printf '%s' "$__fmt_partial" | sed 's/^/  - /'
+    unset __fmt_partial_count
+  fi
+  case "$STACK" in
+    maven)
+      if [ -n "$__fmt_full" ] && pom_has_plugin spotless-maven-plugin && MVN="$(maven_runner)"; then
+        # spotlessFiles is a comma-separated list of regexes matched against
+        # absolute paths — prefix each staged path with .*/ to anchor the tail.
+        __fmt_files="$(printf '%s\n' "$__fmt_full" | sed '/^$/d; s|^|.*/|' | paste -sd, -)"
+        if [ -n "$__fmt_files" ]; then
+          echo "[juninho:pre-commit] Auto-applying spotless to staged files..."
+          $MVN -q spotless:apply -DspotlessFiles="$__fmt_files" || true
+        fi
+        unset __fmt_files
+      fi
+      ;;
+    node)
+      has_prettier_config() {
+        for __pc_f in .prettierrc .prettierrc.json .prettierrc.yml .prettierrc.yaml .prettierrc.js .prettierrc.cjs .prettierrc.mjs prettier.config.js prettier.config.cjs prettier.config.mjs; do
+          [ -f "$__pc_f" ] && { unset __pc_f; return 0; }
+        done
+        unset __pc_f
+        grep -q '"prettier"' package.json 2>/dev/null
+      }
+      if [ -n "$__fmt_full" ] && has_prettier_config && command -v npx >/dev/null 2>&1 && npx --no-install prettier --version >/dev/null 2>&1; then
+        echo "[juninho:pre-commit] Auto-applying prettier to staged files..."
+        __fmt_files="$(printf '%s\n' "$__fmt_full" | sed '/^$/d' | tr '\n' ' ')"
+        npx --no-install prettier --write --ignore-unknown $__fmt_files || true
+        unset __fmt_files
+      fi
+      ;;
+  esac
+  # Re-stage formatter output. Only fully-staged files were formatted, and
+  # those had a clean working tree before the apply — so anything in that set
+  # that is dirty now was touched by the formatter. Partially-staged files
+  # are never re-added, so unstaged hunks stay out of the commit.
+  git diff --name-only | while IFS= read -r __fmt_f; do
+    printf '%s\n' "$__fmt_full" | grep -qxF "$__fmt_f" || continue
+    git add -- "$__fmt_f" || true
+  done
+  unset __fmt_unstaged __fmt_full __fmt_partial __fmt_f
+fi
 
 # --- Run checks (respecting config toggles) ---
 if config_get_workflow_bool implement.skipLintOnPrecommit false; then

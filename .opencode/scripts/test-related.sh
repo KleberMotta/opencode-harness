@@ -47,6 +47,10 @@ case "$STACK" in
       exit 0
     fi
 
+    if maven_dependencies_required; then
+      echo "[juninho:test-related] WARN: docker-compose down; integration tests podem falhar. Rode 'make dependencies' se houver erro."
+    fi
+
     echo "[juninho:test-related] Stack: maven — running $MVN test -Dtest='$PATTERNS' -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false"
     $MVN -q test -Dtest="$PATTERNS" -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false
     exit 0

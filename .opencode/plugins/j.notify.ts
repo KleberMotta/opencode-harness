@@ -4,6 +4,11 @@ import { platform } from "os"
 import { loadJuninhoConfig } from "../lib/j.juninho-config"
 
 const TITLE = "opencode"
+const CHILD_SESSIONS_MAX = 4096
+
+function str(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
 
 function escapeAppleScript(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\\"')
@@ -31,12 +36,33 @@ function sendNotification(message: string): void {
   }
 }
 
-export default (async (_ctx: { directory: string }) => ({
-  "session.idle": async (_input: Record<string, unknown>, output: { metadata?: Record<string, unknown> }) => {
-    const config = loadJuninhoConfig(_ctx.directory)
-    if (config.workflow?.implement?.watchdogSessionStale === false) return
+// session.idle is a bus event, not a plugin hook key — it only reaches
+// plugins through the generic `event` hook.
+export default (async ({ directory }: { directory: string }) => {
+  // Child sessions (anything spawned with a parentID, e.g. task subagents)
+  // idle constantly as they hand back to their parent; only top-level
+  // sessions should raise a desktop notification.
+  const childSessions = new Set<string>()
 
-    const reason = typeof output.metadata?.reason === "string" ? output.metadata.reason : "idle session detected"
-    sendNotification(reason)
-  },
-})) satisfies Plugin
+  return {
+    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+      const properties = event.properties ?? {}
+
+      if (event.type === "session.created") {
+        const info = properties.info && typeof properties.info === "object" ? (properties.info as Record<string, unknown>) : {}
+        const sessionID = str(properties.sessionID) ?? str(info.id)
+        if (!sessionID || !str(info.parentID)) return
+        if (childSessions.size >= CHILD_SESSIONS_MAX) childSessions.clear()
+        childSessions.add(sessionID)
+        return
+      }
+
+      if (event.type !== "session.idle") return
+      const sessionID = str(properties.sessionID)
+      if (sessionID && childSessions.has(sessionID)) return
+      // Gate re-read per event so the toggle applies without a session restart.
+      if (loadJuninhoConfig(directory).workflow?.automation?.idleNotifications === false) return
+      sendNotification("idle session detected")
+    },
+  }
+}) satisfies Plugin

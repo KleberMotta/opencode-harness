@@ -86,3 +86,47 @@ pom_has_plugin() {
   [ -f pom.xml ] || return 1
   grep -q "<artifactId>$1</artifactId>" pom.xml
 }
+
+# maven_has_dependencies_target: returns 0 if a Makefile target named
+# "dependencies" exists (the OLX/Spring Boot convention to spin up Docker
+# Compose with Postgres/Localstack/Unleash before running integration tests).
+maven_has_dependencies_target() {
+  [ -f Makefile ] || return 1
+  # Match a top-of-line target named "dependencies:" (allow ":" or ": dep1 dep2").
+  grep -qE '^dependencies[[:space:]]*:' Makefile
+}
+
+# maven_has_integration_tests: heuristic — returns 0 when Spring integration
+# tests appear to exist (any test annotated @SpringBootTest under src/test).
+# Cheap grep, false negatives are acceptable.
+maven_has_integration_tests() {
+  [ -d src/test ] || return 1
+  # `grep -r` swallows the rare case where src/test has only resources.
+  grep -rqlE '@SpringBootTest|@DataJpaTest|@WebMvcTest' src/test 2>/dev/null
+}
+
+# maven_compose_running: returns 0 if any container of the project's
+# docker-compose.yml is currently running. Best-effort: silently returns
+# non-zero on any error (no docker, no compose, etc.).
+maven_compose_running() {
+  [ -f docker-compose.yml ] || return 1
+  command -v docker >/dev/null 2>&1 || return 1
+  # `docker compose ps -q` lists IDs of containers belonging to the project.
+  # Empty output (or any failure) means nothing is up.
+  _ids="$(docker compose ps -q 2>/dev/null)" || return 1
+  [ -n "$_ids" ]
+}
+
+# maven_dependencies_required: prints a one-liner reason and returns 0 when the
+# repo declares both a docker-compose.yml AND a Makefile `dependencies:` target
+# AND has Spring integration tests AND the compose is currently down.
+# Returns 1 (skip warning) in any other case.
+maven_dependencies_required() {
+  maven_has_dependencies_target || return 1
+  [ -f docker-compose.yml ] || return 1
+  maven_has_integration_tests || return 1
+  if maven_compose_running; then
+    return 1
+  fi
+  return 0
+}

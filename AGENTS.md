@@ -29,10 +29,12 @@ This project uses the **Agentic Coding Framework** v2.1 — installed by [juninh
 | `/j.implement` | Execute active plan until code + task-level tests are green |
 | `/j.implement-task [project:]<slug>/task<id>` | Execute one active-plan task in one write target with full state/validator traceability |
 | `/j.check` | Run repo-wide verification plus detailed PR-style review |
+| `/j.patch <sha> <instruction>` | Surgically edit a specific commit on the active feature branch (interactive rebase + amend) |
 | `/j.lint` | Run structure lint used by the pre-commit path |
 | `/j.test` | Run change-scoped tests used by the pre-commit path |
 | `/j.sync-docs` | Refresh AGENTS, domain docs, and principle docs from code |
 | `/j.finish-setup` | Bootstrap repo knowledge: AGENTS hierarchy, dynamic skills, domain/principles docs |
+| `/j.learn <failure>` | Governed harness self-improvement: one observed failure → minimal single-surface change under a change contract, gated by the full eval suite, recorded in `docs/harness-changes/` |
 | `/j.pr-review` | Advisory review of current branch diff |
 | `/j.status` | Show `execution-state.md` summary |
 | `/j.unify` | Reconcile, update docs, cleanup integrated task bookkeeping, create PR |
@@ -70,7 +72,7 @@ Writes `docs/specs/{feature-slug}/spec.md` plus rich `CONTEXT.md` with explorer 
 
 ### @j.implementer
 READ→ACT→STATE→COMMIT loop. Reads full `CONTEXT.md` alongside spec/plan before source files. Wave-based with task-scoped subagents on a shared feature branch.
-Pre-commit stays fast: structure lint + related tests. Hashline-aware editing.
+Pre-commit stays fast: structure lint + related tests.
 Uses the canonical branch `feature/{slug}` for task commits and supports focused single-task execution via `/j.implement-task`.
 When `workflow.implement.singleTaskMode` is `true`, executes one task per invocation and returns to the developer for review before proceeding.
 Writes canonical state to `docs/specs/{slug}/state/**` and records approved task commits in `integration-state.json` during implementation.
@@ -100,9 +102,12 @@ Fast read-only codebase research. Spawned by planner Phase 1.
 Maps files, patterns, and constraints before the developer interview.
 - Optional Graphify layer: consults `GRAPH_REPORT.md` and `graphify query` CLI before broad grep for god nodes/coupling hotspots, then confirms with normal code search.
 
+### @j.test-writer
+Writes and fixes unit and controller tests following org conventions (JUnit5, Mockito-Kotlin, AAA/given-when-then). Write access to test files only. Never modifies implementation code — reports bugs found during test writing.
+
 ### @j.librarian
 External docs and OSS research. Spawned by planner Phase 1.
-Fetches official API docs via Context7 MCP and context-mode MCP.
+Fetches official API docs via Context7 MCP.
 - Optional Graphify layer: during `/j.unify` refresh, summarizes `GRAPH_REPORT.md` diffs before doing new web research.
 
 ## Context Tiers
@@ -114,6 +119,22 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 | 3 | `j.skill-inject` — file pattern → SKILL.md | Read/Write around matching files |
 | 4 | `<skills>` declaration in `plan.md` task | Explicit per-task requirement |
 | 5 | Session state in `.opencode/state/` + feature state in `docs/specs/{slug}/state/` | Runtime, inter-session, per-task orchestration |
+
+## Context Layers
+
+- First-level workspace folders (e.g. `olxbr/`) are **contexts** — groups of related repos sharing conventions and knowledge.
+- Context assets live in `{context}/agent-context/`: `AGENTS.md`, `skills/`, `skill-map.json`, `lint-rules/`, `references.json`, and `knowledge/` (OKF documents with `type`/`status`/`tags` frontmatter).
+- Precedence: **project > context > workspace** — the most specific layer wins when rules conflict.
+- Context lint rules (`{context}/agent-context/lint-rules/rules.jar`) are picked up automatically by `lint-structure.sh` for repos in that context — prose conventions get mechanized into blocking detekt rules. Mature context skills carry three layers: `SKILL.md` (process), `SYSTEM.md` (canonical output spec — wins over SKILL.md on conflict), and `GOTCHAS.md` (failure memory that feeds new lint rules).
+- Knowledge status rule: documents under `knowledge/domains/` and `knowledge/decisions/` (`status: consolidated`) are **implemented truth**; documents under `knowledge/drafts/` (`status: draft`) are **intent** — never cite a draft as current system behavior.
+
+## Outer Loop
+
+`bun run loop -- --slug <feature>` re-invokes opencode headless on the active feature until it completes, driving the same commands a developer would run — it never bypasses gates.
+Deterministic guards stop the loop: max iterations, stall detection (no new commits/state between iterations), failure repetition (same `Failure fingerprint:` in `check-review.md` twice in a row), and regression (the failure set grows after a fix round).
+The check→implement reentry cap is `workflow.implement.maxCheckReentries`, tracked by the `Reentry count:` line in `check-review.md`.
+When any guard fires, the loop stops and escalates to the human with the available evidence (`check-review.md`, `check-all-output.txt`, fingerprint history).
+Termination is governed by these sensors, never by model confidence.
 
 ## Plugins (auto-discovered by OpenCode)
 
@@ -131,11 +152,10 @@ Fetches official API docs via Context7 MCP and context-mode MCP.
 | `j.notify` | Session idle | Non-blocking local notification on stalls/idleness |
 | `j.carl-inject` | Read + compaction | Inject principles + domain docs from file/task context |
 | `j.skill-inject` | Read/Write | Inject skill by file pattern |
-| `j.intent-gate` | Write/Edit | Warn when edits drift outside the plan |
+| `j.intent-gate` | Write/Edit | Warn when edits drift outside the plan; block out-of-scope edits when `workflow.implement.enforcePlanScope` is true |
+| `j.telemetry` | Bus events | Append JSONL metrics (cost/tokens/session lifecycle) to `docs/specs/{slug}/state/metrics.jsonl`; gated by `workflow.telemetry.enabled` |
 | `j.todo-enforcer` | Write/Edit + compaction | Re-inject incomplete tasks |
 | `j.comment-checker` | Write/Edit | Flag obvious/redundant comments |
-| `j.hashline-read` | Read | Tag lines with content hashes |
-| `j.hashline-edit` | Edit | Validate hash references before editing |
 | `j.memory` | First tool call + compaction | Inject persistent project memory |
 
 Optional Graphify plugin layer (when present in this repo's `.opencode/plugins/`):
@@ -163,7 +183,7 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 - `graphify path "A" "B" --graph <path>` for scoped path tracing between known files/symbols
 - `graphify explain "X" --graph <path>` for cross-domain edge inspection
 - Always prefer `docs/domain/graphify/GRAPH_REPORT.md` over raw `graph.json` in agent prompts and reports
-- If Graphify is disabled, stale, or missing, fall back to context-mode, grep, and LSP
+- If Graphify is disabled, stale, or missing, fall back to grep/Glob and LSP
 
 ## Skills (injected automatically by file pattern)
 
@@ -173,7 +193,6 @@ Optional Graphify CLI layer (requires `graphify` installed via `uv tool install 
 | `j.agents-md-writing` | `**/AGENTS.md` | Directory-local agent guidance |
 | `j.domain-doc-writing` | `docs/domain/**/*.md` | Business behavior and sync markers |
 | `j.graphify-usage` | `docs/domain/graphify/**`, Graphify-aware agents/commands | Safe use of `GRAPH_REPORT.md`, `graphify query`, `graphify path`, and `graphify explain` |
-| `j.context-mode-usage` | Graphify/context-mode docs and agents | Decision rules between Graphify, context-mode, grep/Glob, and LSP |
 | `j.planning-artifact-writing` | `docs/specs/**/{spec,CONTEXT,plan}.md` + workflow prompts | Durable context and ambiguity-free plans |
 | `j.principle-doc-writing` | `docs/principles/**` | Cross-cutting technical rules |
 | `j.shell-script-writing` | `.opencode/scripts/**/*.sh`, `scripts/**/*.sh`, hooks | Fast, safe automation scripts |

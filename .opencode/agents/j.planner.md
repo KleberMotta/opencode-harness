@@ -265,6 +265,31 @@ Read spec, full CONTEXT, task diffs, and dependency state. Classify each task cr
 
 ### Done Criteria
 - Validation report is written to `docs/specs/{feature-slug}/state/tasks/task-2/validator-work.md` and no BLOCK/FIX remains.
+- Validator tasks are executed by `j.validator` (spawned by the implement flow) and produce NO implementation commit — state artifacts only.
+
+## Task M — Write or Fix Tests (OPTIONAL, when test work is substantial)
+- **Project**: {project label}
+- **Wave**: {wave after the implementation tasks it covers}
+- **Agent**: j.test-writer
+- **Depends**: {implementation task ids}
+- **Skills**: j.test-writing
+
+### Context References
+- `CONTEXT.md#{section}`
+
+### Files
+- `src/test/.../ExactFileTest.kt`
+
+### Action
+Write or repair the unit/controller tests for the listed production classes following org conventions (JUnit5, Mockito-Kotlin, AAA). Never modify production code; report implementation bugs found instead. Derive assertions from the spec/plan/CONTEXT behavior contract — read the implementation only for wiring (names, types, dependencies), never to decide what to assert; report ambiguous contracts instead of copying code behavior.
+
+### Verification
+- `focused test command`
+
+### Done Criteria
+- Listed test classes pass.
+
+Use a dedicated `j.test-writer` task when the plan concentrates meaningful test-writing work (new test classes, broken suites after refactors). Small peer tests that belong to an implementation task stay inside that task.
 
 ## Task N — Validation Script and PR Description (ALWAYS LAST)
 - **Project**: {project label}

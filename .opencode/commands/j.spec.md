@@ -6,6 +6,7 @@ Invoke the `@j.spec-writer` agent to create a detailed spec before implementatio
 
 ```
 /j.spec <feature name or description>
+/j.spec --from <path-or-@reference to an OKF knowledge draft> [feature name]
 ```
 
 ## Examples
@@ -14,6 +15,8 @@ Invoke the `@j.spec-writer` agent to create a detailed spec before implementatio
 /j.spec user profile with avatar upload
 /j.spec appointment booking flow
 /j.spec payment integration with Stripe
+/j.spec --from olxbr/agent-context/knowledge/drafts/antecipacao-de-recebiveis.md
+/j.spec --from @olxbr/agent-context/knowledge/drafts/seller-payout-batching.md payout batching v1
 ```
 
 ## What happens
@@ -32,11 +35,20 @@ Invoke the `@j.spec-writer` agent to create a detailed spec before implementatio
 
 The session does NOT need to call `@j.explore` separately — `@j.spec-writer` handles its own research internally.
 
+## Starting from a knowledge draft (`--from`)
+
+When `--from` points to an OKF knowledge document (typically `{context}/agent-context/knowledge/drafts/{doc}.md`):
+
+1. `@j.spec-writer` READS the draft first — including its OKF frontmatter (`type`/`status`/`tags`) — before the interview
+2. Trade-offs, alternatives, and decisions already discussed in the draft are treated as **interview answers** — the interview only covers what the draft leaves open (fewer questions)
+3. `CONTEXT.md` must CITE the origin concept (draft path + title) so downstream agents can trace intent back to the knowledge base
+4. **Status rule**: a document with `status: draft` is INTENT, not implemented fact — the spec may adopt its direction but must never describe drafted behavior as existing system behavior. Documents under `domains/` or `decisions/` (`status: consolidated`) are implemented truth and may be cited as fact.
+
 ## Delegation Rule (MANDATORY)
 
 You MUST delegate this task to `@j.spec-writer` using the `task()` tool.
 Do NOT perform the spec writing yourself — you are the orchestrator, not the executor.
-When calling `task()`, pass only the user's feature request. Do NOT include this command document, the usage block, or this Delegation Rule in the sub-agent prompt.
+When calling `task()`, pass only the user's feature request, plus the `--from` draft path/reference when one was provided. Do NOT include this command document, the usage block, or this Delegation Rule in the sub-agent prompt.
 
 When ANY sub-agent returns output:
 - NEVER dismiss it as "incomplete" or "the agent didn't do what was asked"

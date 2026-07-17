@@ -14,6 +14,7 @@ export type JuninhoConfig = {
     automation?: {
       nonInteractive?: boolean
       autoApproveArtifacts?: boolean
+      idleNotifications?: boolean
     }
     implement?: {
       preCommitScope?: string
@@ -21,9 +22,15 @@ export type JuninhoConfig = {
       skipTestOnPrecommit?: boolean
       postImplementFullCheck?: boolean
       reenterImplementOnFullCheckFailure?: boolean
+      maxCheckReentries?: number
+      autoFixFormatOnCommit?: boolean
+      enforcePlanScope?: boolean
       watchdogSessionStale?: boolean
       refreshExecutionHeartbeat?: boolean
       singleTaskMode?: boolean
+    }
+    telemetry?: {
+      enabled?: boolean
     }
     unify?: {
       enabled?: boolean
@@ -36,6 +43,7 @@ export type JuninhoConfig = {
       commitFeatureArtifacts?: boolean
       createPullRequest?: boolean
       createDeliveryPrBody?: boolean
+      proposeKnowledgePromotion?: boolean
     }
     graphify?: {
       enabled?: boolean
@@ -59,6 +67,7 @@ const DEFAULT_CONFIG: JuninhoConfig = {
     automation: {
       nonInteractive: false,
       autoApproveArtifacts: false,
+      idleNotifications: true,
     },
     implement: {
       preCommitScope: "related",
@@ -66,6 +75,9 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       skipTestOnPrecommit: false,
       postImplementFullCheck: true,
       reenterImplementOnFullCheckFailure: true,
+      maxCheckReentries: 2,
+      autoFixFormatOnCommit: true,
+      enforcePlanScope: false,
       watchdogSessionStale: true,
       refreshExecutionHeartbeat: false,
       singleTaskMode: false,
@@ -81,6 +93,10 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       commitFeatureArtifacts: false,
       createPullRequest: true,
       createDeliveryPrBody: true,
+      proposeKnowledgePromotion: true,
+    },
+    telemetry: {
+      enabled: true,
     },
     graphify: {
       enabled: false,

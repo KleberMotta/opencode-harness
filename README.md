@@ -24,7 +24,7 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 │   ├── plugins/            # plugins runtime em TypeScript (hooks do opencode)
 │   ├── lib/                # bibliotecas compartilhadas dos plugins
 │   ├── scripts/            # shell scripts (check-all, pre-commit, activate-plan…)
-│   ├── skills/             # SKILL.md por padrão de código (ex.: writing services)
+│   ├── skills/             # SKILL.md da camada workspace (docs, shell, meta; as de convenção Kotlin vivem em {contexto}/agent-context/skills/)
 │   ├── skill-map.json      # mapeia file pattern → skill
 │   ├── state/              # estado de sessão (active-plan, persistent-context)
 │   ├── templates/          # templates para artefatos (spec, CONTEXT, plan…)
@@ -38,20 +38,27 @@ O que torna este workspace especial é o **harness Juninho**: uma camada de orqu
 ### Por que `.gitignore` usa allowlist?
 
 ```
+# Ignore everything by default
 /*
-!.gitignore
-!AGENTS.md
+
+# Then unignore the allowed entries
+!/.gitignore
+!/AGENTS.md
+!/opencode.template.json
+!/juninho-config.json
+!/.opencode
+!/docs
+/docs/specs
+!/tmp
 !README.md
-!opencode.template.json
-!juninho-config.json
-!.opencode/
-!docs/
-!tmp/
-!package.json
+!/package.json
+!/.github
+
+# Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
 /tmp/*
 ```
 
-O padrão `/*` ignora **tudo** na raiz por padrão. As linhas `!` re-incluem apenas o que é meu. Isto garante que clonar um projeto novo dentro de `~/repos/olxbr/` **nunca** vai aparecer como untracked aqui — cada projeto tem seu próprio git, e este workspace só rastreia o harness.
+O padrão `/*` ignora **tudo** na raiz por padrão. As linhas `!` re-incluem apenas o que é meu (incluindo `.github/` para CI). Isto garante que clonar um projeto novo dentro de `~/repos/olxbr/` **nunca** vai aparecer como untracked aqui — cada projeto tem seu próprio git, e este workspace só rastreia o harness. Note que `docs/specs/` é ignorado — os artefatos de spec por feature não são versionados neste repo.
 
 ---
 
@@ -171,7 +178,7 @@ Exemplo real (`seller-creation-service`):
 
 ### 4.3 `/j.implement` — Execução do plano inteiro
 
-Delega para `@j.implementer`, que roda o loop **READ → ACT → COMMIT → VALIDATE** task a task, com **uma branch canônica `feature/{slug}`** por feature.
+Delega para `@j.implementer`, que roda o loop **READ → ACT → COMMIT** task a task, com **uma branch canônica `feature/{slug}`** por feature.
 
 ```
 Para cada writeTarget no active-plan.json:
@@ -196,24 +203,17 @@ Para cada writeTarget no active-plan.json:
     │    feature/{slug} (apenas código/config —   │
     │    nada de state aqui)                      │
     │                                             │
-    │ 6. VALIDATE: spawn @j.validator             │
-    │    BLOCK / FIX / NOTE / APPROVED            │
-    │    (FIX-tier: validator pode corrigir       │
-    │    diretamente)                             │
-    │                                             │
-    │ 7. STATE: grava em                          │
+    │ 6. STATE: grava em                          │
     │    docs/specs/{slug}/state/tasks/task-N/    │
     │    - execution-state.md  (lease + status)   │
-    │    - validator-work.md   (audit trail)      │
+    │    - validator-work.md   (quando a task é   │
+    │      de validação)                          │
     │    - retry-state.json                       │
     │    - runtime.json                           │
     └─────────────────────────────────────────────┘
-
-Antes de sair com sucesso:
-  Para cada writeTarget:
-    spawn validator nível-feature → escreve
-    docs/specs/{slug}/state/functional-validation-plan.md
 ```
+
+**Validação NÃO é automática.** O implementer não invoca `@j.validator` após cada commit (regra `NO AUTO-VALIDATION` em `.opencode/agents/j.implementer.md`) — isso economiza tempo e tokens. Validação vem de tasks **explícitas** no `plan.md` com `- **Agent**: j.validator` (e `- **Agent**: j.test-writer` para trabalho concentrado de testes), colocadas pelo planner em pontos estratégicos. O `/j.implement` executa essas tasks como qualquer outra: quando a task declara um agent, o orchestrator spawna aquele agente em vez de um child `@j.implementer`.
 
 Regras críticas:
 - **1 commit por task** na branch `feature/{slug}`. Sem commits adicionais para state.
@@ -234,8 +234,7 @@ Developer roda /j.implement
 │    respeitando depends)          │
 │                                  │
 │ 2. Executa loop completo:        │
-│    READ → ACT → COMMIT →        │
-│    VALIDATE                      │
+│    READ → ACT → COMMIT           │
 │                                  │
 │ 3. PARA e reporta:              │
 │    - Task id + resumo            │
@@ -287,7 +286,7 @@ Delega para `@j.checker`, que:
 2. Para cada writeTarget:
    ├─ Roda .opencode/scripts/check-all.sh
    │  (typecheck + lint + tests do projeto inteiro;
-   │   adapta para Node, Gradle/Kotlin ou Maven)
+   │   adapta para maven, terraform ou node)
    │
    ├─ Lê CONTEXT.md + functional-validation-plan.md
    │
@@ -301,6 +300,8 @@ Delega para `@j.checker`, que:
    docs/specs/{slug}/state/check-review.md        (relatório)
                                                   + Reentry Contract
 ```
+
+**Dependências locais (Maven/Spring):** quando o repo Maven tem `Makefile` com target `dependencies:`, testes Spring (`@SpringBootTest`/`@DataJpaTest`/`@WebMvcTest`) e o docker-compose down, o `check-all.sh` roda `make dependencies` automaticamente antes do `verify` e aguarda os containers subirem (até ~30s). Só falha — com instruções de fix — se os containers não subirem nem assim (veja `.opencode/scripts/check-all.sh` e os helpers `maven_dependencies_required`/`maven_compose_running` em `_detect-stack.sh`).
 
 O **Reentry Contract** dentro do `check-review.md` é a peça-chave: ele lista paths exatos de artefatos e a próxima ação esperada do `/j.implement`, fechando o loop de correção.
 
@@ -335,7 +336,7 @@ Delega para `@j.unify`. Lê os toggles de `juninho-config.json` (`workflow.unify
 └──────────────────────────────────────────────┘
 ```
 
-Pré-requisitos: `gh auth login` ok, todas as tasks `COMPLETE`, validator `APPROVED` em todas, `/j.check` passou.
+Pré-requisitos: `gh auth login` ok, todas as tasks `COMPLETE` (incluindo as tasks de validação do plano com `APPROVED`), `/j.check` passou.
 
 ### 4.8 Auto-Learning — Aprendizado contínuo do harness
 
@@ -403,8 +404,14 @@ Os modelos dos agentes são definidos em `juninho-config.json` (source of truth)
 **Setup inicial (uma vez após clone):**
 
 ```bash
-bun install   # gera opencode.json via prepare hook
+bun install   # o prepare hook roda o sync (gera opencode.json) + `bun run setup`
 ```
+
+O hook `prepare` do `package.json` executa duas coisas em sequência:
+1. **Sync** (`bun run sync`) — gera `opencode.json` a partir de `opencode.template.json` + `juninho-config.json`.
+2. **Guia de setup** (`bun run setup`) — um doctor pós-install que verifica tudo que o harness precisa nesta máquina: `opencode` no PATH, provider autenticado (`opencode auth`), `opencode.json` gerado, tiers de modelo completos, pre-commit hooks nos repos-alvo do plano ativo, docker rodando e (se habilitado) o CLI do graphify. Nunca falha — imprime o próximo passo exato para cada item pendente.
+
+`bun run setup` pode ser re-rodado a qualquer momento para reconferir o ambiente.
 
 **Trocar um modelo:**
 
@@ -455,6 +462,8 @@ Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
 | `skipLintOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `lint-structure.sh` (útil em repos sem lint configurado) |
 | `skipTestOnPrecommit` | `false` | Em `true`, `pre-commit.sh` pula o `test-related.sh` (útil em repos sem test runner) |
 | `singleTaskMode` | `false` | Em `true`, `/j.implement` executa **uma task por vez** e retorna ao developer para revisão antes de prosseguir (ver seção 4.3.1) |
+| `enforcePlanScope` | `false` | Em `true`, o `j.intent-gate` **bloqueia** Write/Edit fora do escopo de Files do plano ativo (`tool.execute.before` lança); em `false`, só emite warnings pós-edit (ver "Loop engineering") |
+| `maxCheckReentries` | `2` | Teto de reentradas check→implement; controlado pela linha `Reentry count:` do `check-review.md` — atingido o teto, o checker escala ao humano |
 
 ### 5.5 `workflow.unify`
 
@@ -465,6 +474,8 @@ Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
 | `updateDomainDocs` | `true` | Refresca `docs/domain/` por target |
 | `updateDomainIndex` | `true` | Atualiza `docs/domain/INDEX.md` |
 | `cleanupIntegratedTaskBookkeeping` | `true` | Marca cleanup do bookkeeping das tasks integradas |
+| `commitDocUpdates` | `true` | Cria um commit gated com as atualizações de docs feitas pelo UNIFY (persistent-context/domain docs) |
+| `refreshGraphify` | `false` no default, `true` aqui | No UNIFY, faz refresh incremental do grafo Graphify de cada target |
 | `commitFeatureArtifacts` | (não-default `false` aqui) | Cria commit opcional de `docs/specs/{slug}/state/**` |
 | `createPullRequest` | `true` no default, `false` aqui | Roda `gh pr create` |
 | `createDeliveryPrBody` | `true` no default, `false` aqui | Gera corpo de PR rico (purpose/problem/solution/changes/validation) |
@@ -483,13 +494,20 @@ Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
 
 ```json
 {
-  "strong":  "github-copilot/gpt-5.4",
-  "medium":  "github-copilot/gpt-5.4",
-  "weak":    "github-copilot/claude-haiku-4.5",
+  "models": {
+    "strong": "github-copilot/claude-opus-4.6",
+    "medium": "github-copilot/claude-sonnet-4.6",
+    "weak": "github-copilot/claude-haiku-4.5"
+  },
   "workflow": {
-    "automation": { "nonInteractive": false, "autoApproveArtifacts": false },
-    "implement":  {
+    "automation": {
+      "nonInteractive": false,
+      "autoApproveArtifacts": false
+    },
+    "implement": {
       "preCommitScope": "related",
+      "skipLintOnPrecommit": false,
+      "skipTestOnPrecommit": false,
       "postImplementFullCheck": true,
       "reenterImplementOnFullCheckFailure": true,
       "watchdogSessionStale": false,
@@ -499,12 +517,21 @@ Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
     "unify": {
       "enabled": true,
       "updatePersistentContext": true,
-      "updateDomainDocs": false,
-      "updateDomainIndex": false,
+      "updateDomainDocs": true,
+      "updateDomainIndex": true,
       "cleanupIntegratedTaskBookkeeping": true,
+      "commitDocUpdates": true,
+      "refreshGraphify": true,
       "commitFeatureArtifacts": false,
       "createPullRequest": false,
       "createDeliveryPrBody": false
+    },
+    "graphify": {
+      "enabled": true,
+      "outputDir": "docs/domain/graphify",
+      "staleAfterDays": 7,
+      "maxCacheMb": 100,
+      "installMethod": "pipx"
     },
     "documentation": {
       "preferAgentsMdForLocalRules": true,
@@ -517,7 +544,7 @@ Override: `JUNINHO_FORCE_STACK=maven|node|terraform|unknown`
 }
 ```
 
-A configuração local **desativou** PR automation, doc updates, e watchdog/heartbeat — e **ativou** `singleTaskMode` — porque o workflow atual é supervisionado: o developer revisa cada task individualmente e os PRs são abertos manualmente.
+A configuração local **desativou** PR automation (`createPullRequest`/`createDeliveryPrBody`) e watchdog/heartbeat — e **ativou** `singleTaskMode`, os doc updates do UNIFY (`updateDomainDocs`/`updateDomainIndex`/`commitDocUpdates`) e o Graphify (`graphify.enabled` + `refreshGraphify`) — porque o workflow atual é supervisionado: o developer revisa cada task individualmente e os PRs são abertos manualmente, mas docs e knowledge graph são mantidos frescos automaticamente no fechamento.
 
 ---
 
@@ -580,8 +607,9 @@ Todo target repo que participa do fluxo `/j.implement` **deve** ter:
 | `@j.explore` | Read-only research no codebase. Spawn pelo planner Phase 1 |
 | `@j.librarian` | Read-only research em docs externas (Context7, MCPs). Spawn pelo planner Phase 1 |
 | `@j.plan-reviewer` | Gate de executabilidade do plano. Approval bias, ≤3 issues. Interno ao planner |
-| `@j.implementer` | READ→ACT→COMMIT→VALIDATE. Wave-based, 1 commit/task em `feature/{slug}` |
-| `@j.validator` | Gate por task. BLOCK/FIX/NOTE/APPROVED. Pode corrigir FIX-tier diretamente |
+| `@j.implementer` | READ→ACT→COMMIT. Wave-based, 1 commit/task em `feature/{slug}`. Não auto-valida |
+| `@j.validator` | Gate de validação via tasks explícitas `Agent: j.validator` no plano. BLOCK/FIX/NOTE/APPROVED. Pode corrigir FIX-tier diretamente |
+| `@j.test-writer` | (Sonnet/medium) Escreve e conserta **apenas** testes unit/controller nas convenções da org (JUnit5, Mockito-Kotlin, AAA, `@MockitoBean`). Nunca toca código de produção — reporta bugs encontrados. Invocado via tasks `Agent: j.test-writer` colocadas pelo planner e executadas pelo fluxo do `/j.implement` |
 | `@j.checker` | Orquestra `check-all.sh` + delega `@j.reviewer`. Persiste `check-review.md` |
 | `@j.reviewer` | Multi-pass code review (correctness/intent/patterns) |
 | `@j.unify` | Fecha o loop conforme toggles `workflow.unify.*` |
@@ -607,10 +635,10 @@ Instalados em `.opencode/plugins/`, carregados automaticamente pelo opencode. Ca
 | `j.notify` | session idle | Notificação local (osascript no macOS) em sessões paradas |
 | `j.memory` | First tool call + compaction | Injeta `persistent-context.md` (memória de longo prazo) |
 | `j.comment-checker` | Write/Edit | Flagga comentários óbvios (`// increment x`, `// loop through`, …) |
-| `j.hashline-read` | Read | Prefixa cada linha lida com `NNN#XX:` (hash MD5 truncado) |
-| `j.hashline-edit` | Edit | Valida que as referências `NNN#XX:` ainda batem antes de editar — protege contra edits cegos sobre conteúdo já desatualizado |
+| `j.graphify-inject` | First tool call | Injeta resumo do `GRAPH_REPORT.md` do Graphify no início de cada sessão (quando `graphify.enabled`) |
+| `j.graphify-stale-warn` | tool.after | Avisa quando o output do Graphify está mais velho que `staleAfterDays` |
 
-Os helpers compartilhados (`j.state-paths`, `j.feature-state-paths`, `j.workspace-paths`, `j.juninho-config`) ficam em `.opencode/lib/`.
+Os helpers compartilhados (`j.state-paths`, `j.feature-state-paths`, `j.workspace-paths`, `j.juninho-config`, `j.tool-compat`) ficam em `.opencode/lib/`.
 
 ---
 
@@ -637,12 +665,22 @@ Expostos pelo harness para os agentes (em `.opencode/tools/`):
 
 Skills são **pacotes de conhecimento dirigidos por padrão de arquivo**. Quando você lê/escreve um arquivo cujo path bate com uma entrada do `skill-map.json`, a `SKILL.md` correspondente é injetada na conversa.
 
-Família atual (em `.opencode/skills/`):
+> **Nota — skills nativas do opencode:** a partir do opencode ≥ 1.17 existe um mecanismo nativo de skills (tool `skill`, carregada sob demanda quando a descrição da skill dá match com a tarefa — modelo *pull*). O harness mantém o plugin `j.skill-inject` como camada de **enforcement** *push* por padrão de arquivo: a skill certa é injetada no momento em que o arquivo é tocado, sem depender do agente decidir carregá-la. Os dois mecanismos coexistem.
 
-- **Padrões de escrita Kotlin/Spring (TRP):** `j.controller-writing`, `j.service-writing`, `j.repository-writing`, `j.entity-writing`, `j.dto-writing`, `j.mapper-writing`, `j.model-writing`, `j.exception-writing`, `j.configuration-writing`, `j.listener-writing`, `j.utility-writing`, `j.client-writing`, `j.api-client-writing`, `j.partner-api-client-writing`, `j.seller-domain-model-writing`, `j.migration-writing`
+Família atual, por camada:
+
+**No contexto `olxbr` (`olxbr/agent-context/skills/`):**
+
+- **Padrões de escrita Kotlin/Spring (TRP):** `j.controller-writing`, `j.service-writing`, `j.repository-writing`, `j.entity-writing`, `j.dto-writing`, `j.mapper-writing`, `j.model-writing`, `j.exception-writing`, `j.configuration-writing`, `j.listener-writing`, `j.utility-writing`, `j.client-writing`, `j.api-client-writing`, `j.seller-domain-model-writing`, `j.migration-writing`
+- **Tests:** `j.test-writing`
+
+**No workspace (`.opencode/skills/`):**
+
 - **Documentação:** `j.agents-md-writing`, `j.domain-doc-writing`, `j.principle-doc-writing`, `j.planning-artifact-writing`
-- **Tests/automação:** `j.test-writing`, `j.shell-script-writing`
+- **Automação:** `j.shell-script-writing`
 - **Meta:** `skill-creator` (cria/refina skills, define cenários de eval)
+
+> As skills que vivem em `{contexto}/agent-context/skills/` **não são vistas pela tool nativa `skill` do opencode** (ela só descobre `.opencode/skills/`); o enforcement delas é feito pelo plugin `j.skill-inject`, que resolve `SKILL.md` com precedência projeto > contexto > workspace. Use `npm run skills:list` para ver as duas camadas.
 
 Cada `SKILL.md` contém: quando aplicar, regras canônicas, exemplos do código real, anti-padrões e checklist.
 
@@ -655,9 +693,11 @@ Cada `SKILL.md` contém: quando aplicar, regras canônicas, exemplos do código 
 ### Instalação
 
 ```bash
-uv tool install graphifyy   # instala o CLI `graphify`
+pipx install graphifyy       # instala o CLI `graphify` (installMethod padrão do harness)
 graphify opencode install    # instala skill + plugin globais para o opencode
 ```
+
+> `uv tool install graphifyy` também funciona se você já usa `uv` — o harness só precisa do binário `graphify` no PATH. O método declarado em `juninho-config.json` (`workflow.graphify.installMethod`) é `pipx`, e é o que o `bun run setup` sugere quando o CLI está ausente.
 
 ### Como funciona no harness
 
@@ -677,22 +717,23 @@ graphify opencode install    # instala skill + plugin globais para o opencode
 
 ### Controle via config
 
-Em `juninho-config.json`:
+Em `juninho-config.json` (estado atual deste workspace — **habilitado**, com `installMethod: pipx`):
 ```json
 {
   "workflow": {
     "graphify": {
-      "enabled": false,
+      "enabled": true,
       "outputDir": "docs/domain/graphify",
       "staleAfterDays": 7,
-      "maxCacheMb": 100
+      "maxCacheMb": 100,
+      "installMethod": "pipx"
     }
   }
 }
 ```
 
 - `enabled: false` (default) → nenhum build automático; smoke manual com `--force`
-- `enabled: true` → `/j.finish-setup` Phase 7 faz build; `/j.unify` faz refresh incremental
+- `enabled: true` (**config atual**) → `/j.finish-setup` Phase 7 faz build; `/j.unify` faz refresh incremental quando `workflow.unify.refreshGraphify` também está ligado (está, neste workspace)
 
 ### Quando usar
 
@@ -728,7 +769,7 @@ Em `juninho-config.json`:
 | `implementer-work.md` | Log append-only do implementer (decisões, retries, deviations) |
 | `check-review.md` | Último relatório de `/j.check` + Reentry Contract |
 | `check-all-output.txt` | Transcript bruto do `check-all.sh` |
-| `functional-validation-plan.md` | Plano de validação funcional (gerado pelo validator nível-feature) |
+| `functional-validation-plan.md` | Plano de validação funcional (gerado pela task final de validação colocada pelo planner no plano) |
 | `integration-state.json` | Manifesto canônico: task → commit validado |
 | `tasks/task-{id}/execution-state.md` | Lease, heartbeat, status, validated commit |
 | `tasks/task-{id}/validator-work.md` | Audit trail do validator |
@@ -747,7 +788,7 @@ LLMs são estocásticos. O harness encapsula cada decisão em um agente isolado,
 Cada child session começa **limpa**. O orchestrator não acumula 200KB de leitura por task. Plugins (`j.plan-autoload`, `j.carl-inject`, `j.skill-inject`, `j.memory`) re-injetam apenas o necessário — e sobrevivem a compactações.
 
 ### 11.3 Spec-driven, não vibe-coded
-`spec.md` + `CONTEXT.md` viram contratos verificáveis. O `@j.validator` valida cada task **contra a spec**, não contra "achismo". Code review (`@j.reviewer`) é multi-pass com critérios explícitos.
+`spec.md` + `CONTEXT.md` viram contratos verificáveis. O `@j.validator` — via tasks de validação explícitas no plano — valida o trabalho **contra a spec**, não contra "achismo". Code review (`@j.reviewer`) é multi-pass com critérios explícitos.
 
 ### 11.4 Multi-projeto nativo
 Um único plano unificado (`docs/specs/{slug}/plan.md` no workspace root) pode abranger N repositórios (write targets) + M referências. O estado de toda a feature vive centralizado em `docs/specs/{slug}/state/` no workspace — branches consistentes (`feature/{slug}` em cada repo), e cleanups coordenados.
@@ -760,9 +801,6 @@ Praticamente todo passo automatizado tem um toggle em `juninho-config.json`. Em 
 
 ### 11.7 Skills como documentação executável
 Em vez de "documentação que ninguém lê", as skills são injetadas **exatamente quando** o agente toca um arquivo daquele padrão. Conhecimento de pattern vira lei aplicada — não sugestão ignorada.
-
-### 11.8 Hashlines para edits seguros
-Toda Read tagga linhas com `NNN#XX:` (hash MD5 truncado da linha). Toda Edit valida o hash antes de aplicar. Isto **impede edits cegos** sobre arquivos que mudaram entre a leitura e a escrita — bug clássico em agentes que não validam estado.
 
 ---
 
@@ -823,11 +861,13 @@ Toda Read tagga linhas com `NNN#XX:` (hash MD5 truncado da linha). Toda Edit val
 | `/j.activate-plan <repo|plan-path>` | Refresca `active-plan.json` para apontar outra feature |
 | `/j.implement` | Executa o plano ativo inteiro |
 | `/j.implement-task [proj:]<slug>/task<id>` | Executa exatamente uma task |
+| `/j.patch <sha> <instrução>` | Edição cirúrgica de um commit histórico da feature branch via rebase interativo — com guards (SHA ancestral de HEAD, nunca trunk, worktree limpa) e branch de backup automática |
 | `/j.check` | Quality gate completo + multi-pass review |
 | `/j.lint` | Apenas o structure lint do pre-commit |
 | `/j.test` | Apenas os testes change-scoped |
 | `/j.sync-docs` | Refresca AGENTS, domain docs e principle docs a partir do código |
-| `/j.finish-setup` | Bootstrap: gera `AGENTS.md` hierárquicos, popula `skill-map.json`, cria docs base |
+| `/j.finish-setup` | Bootstrap: gera `AGENTS.md` hierárquicos, popula `skill-map.json`, cria docs base — convenções medidas por `analyze-conventions.sh` |
+| `/j.learn <falha>` | Auto-learning governado: 1 falha observada → mudança mínima em 1 superfície do harness, com change contract + gate de regressão + registro em `docs/harness-changes/` |
 | `/j.pr-review` | Review advisory do diff atual da branch |
 | `/j.status` | Resumo do `execution-state.md` |
 | `/j.unify` | Fecha o loop (docs/cleanup/PR conforme config) |
@@ -865,8 +905,10 @@ Algumas operações repetitivas no `juninho-config.json` e no `state/` (trocar m
 
 ```bash
 bun --version   # já vem instalado neste workspace
-bun install     # gera opencode.json (roda prepare hook — necessário após clone)
+bun install     # prepare hook: sync (gera opencode.json) + guia de setup (necessário após clone)
 ```
+
+O `prepare` roda `bun run sync` e em seguida `bun run setup` — o guia de configuração que verifica opencode no PATH, auth do provider, hooks de pre-commit, docker e graphify (ver seção 5.1). `bun run setup` pode ser re-rodado a qualquer momento.
 
 > **Por que Bun?** Os plugins/lib/tools do harness já são TypeScript executados pelo opencode em runtime Bun. Reaproveitar o runtime mantém o `package.json` zero-deps.
 
@@ -877,6 +919,7 @@ Todos rodam a partir de `~/repos/`:
 | Script | O que faz | Exemplo |
 |--------|-----------|---------|
 | `npm run sync` | Gera `opencode.json` a partir do template + config | `npm run sync` |
+| `bun run setup` | Guia de configuração (doctor): verifica opencode/PATH, auth, hooks, docker, graphify — re-rodável a qualquer momento | `bun run setup` |
 | `npm run model:list` | Mostra tiers atuais (strong/medium/weak) | `npm run model:list` |
 | `npm run model:set -- <tier> <model>` | Atualiza tier no config e regenera opencode.json | `npm run model:set -- strong github-copilot/claude-opus-4.7` |
 | `npm run config:show` | Imprime o `juninho-config.json` formatado | `npm run config:show` |
@@ -890,6 +933,7 @@ Todos rodam a partir de `~/repos/`:
 | `npm run skills:list` | Lista todas as skills + descrição | `npm run skills:list` |
 | `npm run agents:list` | Lista todos os subagentes + descrição | `npm run agents:list` |
 | `npm run hooks:install -- --repo <path>` | Gera `scripts/pre-commit.sh` + instala symlink no target repo | `npm run hooks:install -- --repo olxbr/trp-seller-api` |
+| `bun run loop -- --slug <feature>` | Outer loop: reinvoca o opencode headless até a feature concluir, com guardas determinísticas (ver "Loop engineering") | `bun run loop -- --slug seller-creation-service` |
 
 ### 16.3 Caso de uso típico — trocar modelo strong
 
@@ -980,3 +1024,80 @@ esac
 ### 17.5 `harness-feature-integration.sh --all-targets`
 
 O script de integração de feature aceita `--all-targets <action>` para rodar a mesma ação (`ensure`, `switch`, `cleanup`) em todos os write targets do plano ativo. Útil para preparar/limpar branches `feature/{slug}` em N repos com um comando só.
+
+---
+
+## Camada de contexto e knowledge base (OKF)
+
+As pastas de 1º nível deste workspace (ex.: `olxbr/`) são **contextos**: agrupam repositórios que compartilham convenções, vocabulário e conhecimento de negócio. Cada contexto carrega seus ativos em `agent-context/`:
+
+```
+olxbr/
+└── agent-context/
+    ├── AGENTS.md          # regras do contexto, herdadas por todos os repos dele
+    ├── skills/            # skills específicas do contexto
+    ├── skill-map.json     # file pattern → skill, no escopo do contexto
+    ├── lint-rules/        # regras de lint customizadas do contexto
+    ├── references.json    # referências cross-repo do contexto
+    └── knowledge/         # base de conhecimento em OKF
+        ├── log.md         # log do bundle: promoções, revisões
+        ├── drafts/        # status: draft — intenção, ainda não implementada
+        ├── domains/       # status: consolidated — verdade de negócio implementada
+        └── decisions/     # decisões registradas — verdade implementada
+```
+
+**Precedência: projeto > contexto > workspace.** O `AGENTS.md` do repo vence o do contexto, que vence o global (`~/repos/AGENTS.md`). O mesmo vale para skills e regras de lint — a camada mais específica ganha.
+
+**OKF (formato olxbr-knowledge):** todo documento da knowledge base tem frontmatter `type`/`status`/`tags`. A regra de leitura vale para qualquer agente:
+
+- `status: draft` (em `drafts/`) = **intenção não implementada** — nunca é fato; nenhum agente pode citar um draft como comportamento atual do sistema.
+- `domains/` e `decisions/` (`status: consolidated`) = **verdade implementada** — podem ser citados como fato e usados como constraint.
+
+**Fluxo draft → produção:**
+
+1. Uma ideia é discutida e registrada como draft em `knowledge/drafts/` (trade-offs, alternativas, decisões preliminares).
+2. `/j.spec --from <path-do-draft>` — o `@j.spec-writer` lê o draft, trata os trade-offs já discutidos como respostas de entrevista (menos perguntas) e **cita o conceito de origem** no `CONTEXT.md`.
+3. `/j.plan` e `/j.implement` seguem o fluxo normal — a spec carrega a intenção do draft como trabalho novo, nunca como fato.
+4. No `/j.unify`, se os artefatos da feature citam o draft, o harness **propõe** a promoção draft→consolidated (mover para `domains/` ou `decisions/`, flip do `status`, entrada no `log.md` do bundle) — sempre proposta aprovável pelo dev, nunca automática (gate: `workflow.unify.proposeKnowledgePromotion`).
+
+---
+
+## Loop engineering
+
+O **outer loop** é o driver determinístico que reinvoca o opencode em modo headless até a feature concluir — sem um humano precisar digitar `/j.implement` → `/j.check` → … a cada rodada:
+
+```bash
+bun run loop -- --slug <feature>
+```
+
+A cada iteração o driver executa o próximo comando pendente do ciclo e lê os **sensores** persistidos em `docs/specs/{slug}/state/` para decidir se continua. As guardas são determinísticas:
+
+| Guarda | Sinal | Efeito |
+|---|---|---|
+| Max iterations | nº de invocações ultrapassa o teto | para e escala ao humano |
+| Stall | iteração termina sem novos commits/estado | para |
+| Repetição de falha | mesmo `Failure fingerprint:` no `check-review.md` em duas rodadas seguidas | para (beco sem saída, não persistência) |
+| Regressão | o conjunto de falhas cresce após uma rodada de fix | para e escala |
+| Reentry cap | `Reentry count:` ≥ `workflow.implement.maxCheckReentries` | o checker instrui parada + escalonamento |
+
+**Critério de parada é sempre por sensor** (verificação determinística), nunca por "confiança do modelo": o loop só termina com o check verde e o unify concluído, ou com escalonamento ao humano portando o evidence disponível (`check-review.md` com fingerprint history, `check-all-output.txt`). O loop nunca contorna gates — apenas reentra nos mesmos comandos que um developer rodaria.
+
+### Evidence bundle e failure routing no `/j.check`
+
+Além do `Reentry Contract` e do `## Loop State` (failure fingerprint + reentry count), o `@j.checker` anexa duas seções ao `check-review.md`, ambas construídas a partir de evidência que ele mesmo possui (`check-all-output.txt` + relatório persistido do reviewer): `## Evidence Bundle` — uma linha por check executado, incluindo o que ele **não** cobre — e `## Failure Routing` — cada falha classificada numa rota tipada (`FORMAT` → autofix no próximo commit; `INFRA` → instruções de ambiente, nunca reentry de código; `COVERAGE_GAP` → follow-up task com `Agent: j.test-writer`; `STYLE_RECURRENT` → candidata a regra detekt no `lint-rules/` do contexto; `UNKNOWN` → escalada). Nenhuma rota existe sem citar sua evidência (a linha exata do `check-all-output.txt` ou o `{file:line}` do finding), e o `Next action` do Reentry Contract é expresso por essas rotas — nunca prosa livre.
+
+### Telemetria (`metrics.jsonl`)
+
+O plugin `j.telemetry` escuta o bus de eventos do opencode e appenda uma linha JSONL por evento relevante — step-finish com custo/tokens, mensagens do assistant, criação/idle de sessão, arquivos editados, comandos executados — em `docs/specs/{slug}/state/metrics.jsonl` (fallback: `.opencode/state/metrics.jsonl` quando não há plano ativo com slug). É puramente observacional: nunca injeta contexto, nunca bloqueia, e eventos com shape inesperado são ignorados em silêncio. Gate: `workflow.telemetry.enabled` (default `true`), relido por mtime do config — desligar não exige restart.
+
+### `enforcePlanScope` — scope guard bloqueante
+
+`workflow.implement.enforcePlanScope` (default `false`) promove o `j.intent-gate` de advisory para bloqueante: um Write/Edit fora do escopo de Files do plano ativo é rejeitado em `tool.execute.before`, com instrução explícita de criar follow-up task, perguntar ao developer ou desligar o toggle. Paths de bookkeeping do workflow (`docs/specs/`, `.opencode/`, `AGENTS.md`) continuam graváveis mesmo sob enforcement. Em `false`, vale o comportamento clássico: warning pós-edit, sem bloqueio.
+
+### `/j.learn` — auto-learning governado do harness
+
+`/j.learn <falha observada>` transforma uma falha real do harness (correção do dev, finding recorrente do check, trace de sessão) em **uma** mudança mínima em **uma** superfície nomeada (agente, comando, plugin, script, skill, `skill-map.json`, `AGENTS.md` do contexto ou `lint-rules/`), sob um **change contract** escrito antes do apply: mecanismo da falha, evidência verbatim, efeito esperado, invariantes preservadas, eval falsificadora e rollback exato. A suite completa de evals é o **gate de regressão** — qualquer regressão rejeita a proposta (sem iterar "até passar"); aplicar exige aprovação humana explícita (superfícies de segurança exigem-na mesmo em `nonInteractive`); e o registro permanente vai para `docs/harness-changes/NNN-<slug>.md`. Sem evidência não há proposta; `--dry-run` roda tudo menos o apply.
+
+### `analyze-conventions.sh` no `/j.finish-setup`
+
+A Phase 3 do `/j.finish-setup` é *measure first*: `.opencode/scripts/analyze-conventions.sh <repo> --json` emite fatos determinísticos sobre o repo — indentação dominante, p95 de comprimento de linha, sufixos CamelCase de classe, distribuição de prefixos de commit, ratio teste/fonte, frameworks de teste e formatter/linter configurado — cada número acompanhado de `samples` reais (paths/linhas do próprio repo). Skills e `AGENTS.md` gerados só afirmam uma convenção como regra com ≥3 exemplos citados; campo omitido no JSON significa "sem evidência" e nunca é preenchido por palpite.

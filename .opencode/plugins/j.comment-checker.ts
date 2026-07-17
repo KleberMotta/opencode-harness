@@ -1,4 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { toolIs } from "../lib/j.tool-compat"
 
 // Detects obvious/redundant comments after Write/Edit and appends a reminder.
 // Uses tool.execute.after — appends to output.output so agent sees the warning.
@@ -50,9 +51,9 @@ export default (async ({ directory: _directory }: { directory: string }) => ({
     input: { tool: string; sessionID: string; callID: string; args: any },
     output: { title: string; output: string; metadata: any }
   ) => {
-    if (!["Write", "Edit"].includes(input.tool)) return
+    if (!toolIs(input.tool, "write", "edit")) return
 
-    const content: string = input.args?.content ?? input.args?.new_string ?? ""
+    const content: string = input.args?.content ?? input.args?.newString ?? input.args?.new_string ?? ""
     if (!content) return
 
     const obvious = hasObviousComments(content)

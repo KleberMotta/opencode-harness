@@ -66,7 +66,12 @@ describe("harness structural contracts", () => {
   test("skill files use minimal expected frontmatter", () => {
     const root = opencodeRoot()
     const skillsDir = path.join(root, "skills")
-    const skillDirs = Array.from(new Bun.Glob("*/SKILL.md").scanSync({ cwd: skillsDir }))
+    // Vendored third-party skills keep their upstream structure and are not
+    // held to the harness skill-authoring convention.
+    const vendoredSkills = new Set(["graphify"])
+    const skillDirs = Array.from(new Bun.Glob("*/SKILL.md").scanSync({ cwd: skillsDir })).filter(
+      (relativePath) => !vendoredSkills.has(path.dirname(relativePath))
+    )
 
     expect(skillDirs.length).toBeGreaterThan(0)
     for (const relativePath of skillDirs) {

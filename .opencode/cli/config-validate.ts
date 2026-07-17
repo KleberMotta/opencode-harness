@@ -12,11 +12,17 @@ const ALLOWED_WORKFLOW = new Set([
   "unify",
   "graphify",
   "documentation",
+  "telemetry",
+])
+
+const ALLOWED_TELEMETRY = new Set([
+  "enabled",
 ])
 
 const ALLOWED_AUTOMATION = new Set([
   "nonInteractive",
   "autoApproveArtifacts",
+  "idleNotifications",
 ])
 
 const ALLOWED_IMPLEMENT = new Set([
@@ -25,6 +31,9 @@ const ALLOWED_IMPLEMENT = new Set([
   "skipTestOnPrecommit",
   "postImplementFullCheck",
   "reenterImplementOnFullCheckFailure",
+  "maxCheckReentries",
+  "autoFixFormatOnCommit",
+  "enforcePlanScope",
   "watchdogSessionStale",
   "refreshExecutionHeartbeat",
   "singleTaskMode",
@@ -41,6 +50,7 @@ const ALLOWED_UNIFY = new Set([
   "commitFeatureArtifacts",
   "createPullRequest",
   "createDeliveryPrBody",
+  "proposeKnowledgePromotion",
 ])
 
 const ALLOWED_GRAPHIFY = new Set([
@@ -77,6 +87,7 @@ if (wf.implement) issues.push(...unknownKeys(wf.implement, ALLOWED_IMPLEMENT, "w
 if (wf.unify) issues.push(...unknownKeys(wf.unify, ALLOWED_UNIFY, "workflow.unify"))
 if (wf.graphify) issues.push(...unknownKeys(wf.graphify, ALLOWED_GRAPHIFY, "workflow.graphify"))
 if (wf.documentation) issues.push(...unknownKeys(wf.documentation, ALLOWED_DOCUMENTATION, "workflow.documentation"))
+if (wf.telemetry) issues.push(...unknownKeys(wf.telemetry, ALLOWED_TELEMETRY, "workflow.telemetry"))
 
 if (issues.length > 0) {
   die(`config inválida:\n  - ${issues.join("\n  - ")}`)

@@ -46,6 +46,21 @@ Write in present tense only — describe the current state, not historical event
 
 Do not create a new git commit during UNIFY just to persist these notes. If long-lived docs or memory changes must land in repository history, they should be delivered as explicit implementer tasks in the plan.
 
+### Step 2.5 — Telemetry Summary (if enabled)
+
+This step is controlled by `workflow.telemetry.enabled` and defaults to `true`. It is report-only: no file writes, no commits.
+
+Skip it (and report the intentional skip) when the toggle is `false` or when `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/metrics.jsonl` does not exist.
+
+When enabled and the metrics file exists:
+- Read `docs/specs/{feature-slug}/state/metrics.jsonl` — one JSON object per line, written by the `j.telemetry` plugin (`{ts, event, sessionID, ...}`).
+- Aggregate:
+  - **Cost / tokens**: use `message.updated` lines. Cost and tokens on these lines are cumulative per assistant message, so for each `(sessionID, messageID)` take only the LAST line, then sum `cost`, `tokens.input`, and `tokens.output`. Fall back to summing `step_finish` lines only when no `message.updated` lines exist — never sum both, that double-counts.
+  - **Sessions**: count of distinct `sessionID` values across all lines.
+  - **Files edited**: count of `file.edited` lines.
+  - **Duration**: approximate, first `ts` → last `ts`.
+- Include the aggregates as a short table in the `## Telemetry` section of the Unify Report output ONLY. Do not append the summary to `implementer-work.md` or any other artifact, and never create a commit for telemetry.
+
 ### Step 3 — Reconcile Global Execution State (Non-Mutating)
 
 Read `.opencode/state/execution-state.md`.
@@ -126,7 +141,7 @@ When enabled:
 Suggested implementation shape for each write target, adapted only for path quoting and local shell safety:
 
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch {feature-slug}
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" switch {feature-slug}
 git diff --name-only
 git ls-files --others --exclude-standard
 # Stage only files matching the allowlist above and not matching docs/specs/{feature-slug}/state/**.
@@ -135,6 +150,23 @@ git diff --cached --quiet || git commit -m "chore(docs): refresh after {feature-
 ```
 
 Acceptance example: with only `docs/domain/foo.md` changed during closeout, `/j.unify` should create exactly one commit named `chore(docs): refresh after {feature-slug}` for that write target.
+
+### Step 5.75 — Knowledge Promotion (proposal only, if enabled)
+
+This step is controlled by `workflow.unify.proposeKnowledgePromotion` and defaults to `true`. Skip it (and report the intentional skip) when the toggle is `false` or when `workflow.automation.nonInteractive` is `true` — there is no developer available to approve.
+
+Contexts keep an OKF knowledge base in `{context}/agent-context/knowledge/` (e.g. `olxbr/agent-context/knowledge/`), where `drafts/` holds unimplemented intent (`status: draft`) and `domains/` plus `decisions/` hold implemented truth (`status: consolidated`).
+
+When enabled:
+- Scan the feature artifacts — `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md`, `spec.md`, and `plan.md` — for references to OKF draft documents: any path containing `/knowledge/drafts/`.
+- For each referenced document, read its OKF frontmatter. Only documents still carrying `status: draft` are promotion candidates.
+- For each candidate whose intent this feature actually delivered, present a promotion proposal to the developer via the `question` tool. The proposal names the exact mechanical change:
+  1. move the file from `{context}/agent-context/knowledge/drafts/` to the appropriate consolidated directory (`{context}/agent-context/knowledge/domains/` for business/domain concepts, `decisions/` for decisions)
+  2. flip the frontmatter to `status: consolidated`
+  3. append an entry to the bundle's `log.md` (`{context}/agent-context/knowledge/log.md`): date, document, `{feature-slug}`, and a one-line reason
+- Apply the promotion ONLY after explicit developer approval. This step is ALWAYS a proposal — never promote automatically. A rejected or unanswered proposal leaves the draft untouched.
+- If the feature only partially implements the draft, say so in the proposal and recommend keeping it as a draft with a note instead of promoting.
+- Promotions touch context directories outside the write targets; they are never part of the Step 5.5 doc-sync commit or the Step 6.5 artifact commit.
 
 ### Step 6 — Cleanup Integrated Task Branches (if enabled)
 
@@ -145,8 +177,8 @@ For each write target (`$REPO_ROOT`), read `$WORKSPACE_ROOT/docs/specs/{feature-
 
 If cleanup is enabled (run via the Bash tool with `workdir="$REPO_ROOT"`):
 ```bash
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh switch {feature-slug}
-sh /Users/kleber.motta/repos/.opencode/scripts/harness-feature-integration.sh cleanup {feature-slug}
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" switch {feature-slug}
+sh "$WORKSPACE_ROOT/.opencode/scripts/harness-feature-integration.sh" cleanup {feature-slug}
 ```
 
 ### Step 6.5 — Commit Feature Artifacts (if enabled)
@@ -230,6 +262,12 @@ When PR creation is enabled, the PR body should match a high-quality human PR:
 ## Closeout Actions
 - {enabled step}: {result}
 
+## Telemetry
+{short table: total cost, tokens in/out, sessions, files edited, duration | "disabled by workflow-config" | "no metrics recorded"}
+
+## Knowledge Promotion
+- {draft path}: proposed → approved (promoted to domains/ or decisions/ + status flip + log.md entry) | proposed → rejected (left as draft) | not proposed ({reason}) | "disabled by workflow-config" | "no drafts referenced"
+
 ## PR Created
 {PR URL or "disabled by workflow-config"}
 ```
@@ -245,4 +283,5 @@ When PR creation is enabled, the PR body should match a high-quality human PR:
 - Read per-task state from `docs/specs/{feature-slug}/state/`, not from `.opencode/state/`
 - The spec is optional — if it doesn't exist, fall back to plan goal and task criteria
 - Never infer task completion from ad hoc branch scans; use only `integration-state.json` plus task state
+- Knowledge promotion (draft → consolidated) is always a developer-approved proposal — never move, edit, or re-status a knowledge document without explicit approval in this session
 - Never create a synthetic closeout commit for code or summaries. The only optional UNIFY commits are the doc-sync commit gated by `workflow.unify.commitDocUpdates` and the feature-state artifact commit gated by `workflow.unify.commitFeatureArtifacts`; both must stay within their documented allowlists and must never include synthetic code changes.

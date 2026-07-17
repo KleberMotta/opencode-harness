@@ -4,10 +4,6 @@
       "type": "local",
       "command": ["npx", "-y", "@upstash/context7-mcp@latest"]
     },
-    "context-mode": {
-      "type": "local",
-      "command": ["npx", "-y", "context-mode@latest"]
-    },
     "exa": {
       "type": "remote",
       "url": "https://mcp.exa.ai/mcp",
@@ -62,7 +58,8 @@
         "task": {
           "*": "deny",
           "j.implementer": "allow",
-          "j.validator": "allow"
+          "j.validator": "allow",
+          "j.test-writer": "allow"
         },
         "question": "deny"
       }
@@ -102,6 +99,16 @@
     },
     "j.unify": {
       "model": "__STRONG_MODEL__",
+      "permission": {
+        "bash": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "task": "deny",
+        "question": "allow"
+      }
+    },
+    "j.test-writer": {
+      "model": "__MEDIUM_MODEL__",
       "permission": {
         "bash": "allow",
         "write": "allow",
@@ -158,18 +165,6 @@
     }
   },
   "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "github-copilot": {
-      "models": {
-        "gpt-5.4-OK": {
-          "limit": {
-            "context": 400000,
-            "output": 32000
-          }
-        }
-      }
-    }
-  },
   "permission": {
     "*": "allow",
     "doom_loop": "deny",

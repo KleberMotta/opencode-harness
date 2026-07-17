@@ -1,24 +1,54 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { existsSync, readFileSync, readdirSync } from "fs"
+import { existsSync, readFileSync, readdirSync, statSync } from "fs"
 import path from "path"
 import { resolveStateFile } from "../lib/j.state-paths"
 import { loadActivePlanTarget, loadActivePlanTargets, resolveActivePlanStateFile, resolvePathFromProjectRoot, resolveProjectPaths } from "../lib/j.workspace-paths"
+import { argFilePath, toolIs } from "../lib/j.tool-compat"
+import { loadJuninhoConfig } from "../lib/j.juninho-config"
 
 // Scope-guard: after any Write/Edit, checks if the modified file is part of
 // the current plan. If it drifts outside the plan scope, appends a warning.
 // Uses tool.execute.after on Write/Edit — agent sees the warning and can
 // course-correct before continuing.
+//
+// Blocking mode: when workflow.implement.enforcePlanScope is true, a
+// tool.execute.before hook throws on out-of-scope Write/Edit instead of only
+// warning after the fact. Workflow bookkeeping paths (docs/, .opencode/,
+// AGENTS.md) stay writable even under enforcement. Config is re-read per call
+// (small file) so the toggle works without restarting opencode.
 
 function extractPlanFiles(planContent: string): Set<string> {
   const files = new Set<string>()
   // Matches common plan file references: paths with extensions, bullet paths, etc.
-  const pathPattern = /(?:^|\s|\/|\|)[\w\-./]+\.[a-z]{1,5}\b/gi
+  const pathPattern = /(?:^|\s|\/|\|)[\w\-./]+\.[a-zA-Z0-9]{1,12}\b/g
   for (const match of planContent.matchAll(pathPattern)) {
     const cleaned = match[0].replace(/^[\s/|]+/, "").trim()
     if (cleaned.endsWith(".") || cleaned.length < 4) continue
     files.add(cleaned)
   }
+  // Backtick-quoted tokens cover extensionless files (Dockerfile, Makefile)
+  // — plans list their Files entries as `path`.
+  for (const match of planContent.matchAll(/`([\w\-./]+)`/g)) {
+    if (match[1].length < 3) continue
+    files.add(match[1])
+  }
   return files
+}
+
+function isInPlanScope(planFiles: Set<string>, relPath: string): boolean {
+  return [...planFiles].some(
+    (pf) => relPath.endsWith(pf) || relPath.includes(pf) || pf.includes(relPath)
+  )
+}
+
+// Paths that stay writable even when enforcePlanScope blocks out-of-scope
+// edits: docs (specs, domain, principles), harness files, and agent
+// instruction files are workflow bookkeeping, not plan-scope drift.
+function isEnforcementExempt(relPath: string): boolean {
+  if (/(^|\/)docs\//.test(relPath)) return true
+  if (/(^|\/)\.opencode\//.test(relPath)) return true
+  if (path.basename(relPath) === "AGENTS.md") return true
+  return false
 }
 
 function readDirectoryNames(target: string): string[] {
@@ -97,7 +127,7 @@ function repoScopeWarning(
 }
 
 export default (async ({ directory }: { directory: string }) => {
-  const planFilesBySession = new Map<string, Set<string>>()
+  const planFilesBySession = new Map<string, { planPath: string; mtimeMs: number; files: Set<string> }>()
   const routingHintsBySession = new Map<string, { prompt?: string; targetRepoRoot?: string; planPath?: string; specPath?: string; contextPath?: string; taskContractPath?: string }>()
 
   function captureRoutingHint(sessionID: string, hint: { prompt?: string; targetRepoRoot?: string; planPath?: string; specPath?: string; contextPath?: string; taskContractPath?: string }): void {
@@ -108,7 +138,7 @@ export default (async ({ directory }: { directory: string }) => {
     })
   }
 
-  function loadActivePlanContent(directory: string, sessionID?: string): string | null {
+  function loadActivePlanContent(directory: string, sessionID?: string): { planPath: string; content: string } | null {
     const hints = routingHintsBySession.get(sessionID ?? "")
     const activePlanPath = resolveActivePlanStateFile(directory, {
       preferProjectState: true,
@@ -138,7 +168,7 @@ export default (async ({ directory }: { directory: string }) => {
           ? resolvePathFromProjectRoot(projectPaths.projectRoot, declaredPath)
           : path.join(directory, declaredPath)
       if (existsSync(resolvedPath)) {
-        return readFileSync(resolvedPath, "utf-8")
+        return { planPath: resolvedPath, content: readFileSync(resolvedPath, "utf-8") }
       }
     }
 
@@ -174,69 +204,73 @@ export default (async ({ directory }: { directory: string }) => {
         : path.join(directory, declaredPlan)
     if (!existsSync(resolvedPlan)) return null
 
-    return readFileSync(resolvedPlan, "utf-8")
+    return { planPath: resolvedPlan, content: readFileSync(resolvedPlan, "utf-8") }
   }
 
-  function resolveSessionProjectRoot(directory: string, sessionID: string): string | null {
-    const hints = routingHintsBySession.get(sessionID)
-    const targets = loadActivePlanTargets(directory, {
-      preferProjectState: true,
-      prompt: hints?.prompt,
-      targetRepoRoot: hints?.targetRepoRoot,
-      planPath: hints?.planPath,
-      specPath: hints?.specPath,
-      contextPath: hints?.contextPath,
-      taskContractPath: hints?.taskContractPath,
-    })
-    for (const target of targets) {
-      if (!target.targetRepoRoot) continue
-      const projectPaths = resolveProjectPaths(directory, { targetRepoRoot: target.targetRepoRoot, planPath: target.planPath })
-      const specsRoot = projectPaths?.specsRoot
-      if (!specsRoot || !existsSync(specsRoot)) continue
-
-      for (const featureSlug of readDirectoryNames(specsRoot)) {
-        const runtimePath = path.join(specsRoot, featureSlug, "state", "sessions", sessionID + "-runtime.json")
-        if (!existsSync(runtimePath)) continue
-        try {
-          const runtime = JSON.parse(readFileSync(runtimePath, "utf-8")) as { targetRepoRoot?: string }
-          return runtime.targetRepoRoot?.trim() || target.targetRepoRoot
-        } catch {
-          return target.targetRepoRoot
-        }
-      }
+  function planMtimeMs(planPath: string): number {
+    try {
+      return statSync(planPath).mtimeMs
+    } catch {
+      return 0
     }
-
-    return loadActivePlanTarget(directory, {
-      preferProjectState: true,
-      prompt: hints?.prompt,
-      targetRepoRoot: hints?.targetRepoRoot,
-      planPath: hints?.planPath,
-      specPath: hints?.specPath,
-      contextPath: hints?.contextPath,
-      taskContractPath: hints?.taskContractPath,
-    })?.targetRepoRoot?.trim() || null
   }
 
+  // Cached per session, revalidated on every use: a changed plan path, a
+  // changed mtime, or an empty cached set (no plan yet / no files matched)
+  // triggers a recompute — so editing plan.md mid-session actually unblocks.
   function getPlanFiles(sessionID: string): Set<string> {
-    const existing = planFilesBySession.get(sessionID)
-    if (existing) return existing
-
-    const planFiles = new Set<string>()
-    const content = loadActivePlanContent(directory, sessionID)
-    if (content) {
-      for (const file of extractPlanFiles(content)) planFiles.add(file)
+    const plan = loadActivePlanContent(directory, sessionID)
+    if (!plan) {
+      planFilesBySession.delete(sessionID)
+      return new Set()
     }
 
-    planFilesBySession.set(sessionID, planFiles)
-    return planFiles
+    const mtimeMs = planMtimeMs(plan.planPath)
+    const cached = planFilesBySession.get(sessionID)
+    if (cached && cached.planPath === plan.planPath && cached.mtimeMs === mtimeMs && cached.files.size > 0) {
+      return cached.files
+    }
+
+    const files = extractPlanFiles(plan.content)
+    planFilesBySession.set(sessionID, { planPath: plan.planPath, mtimeMs, files })
+    return files
   }
 
   return {
+    "tool.execute.before": async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { args: any }
+    ) => {
+      if (!toolIs(input.tool, "write", "edit")) return
+
+      // Re-read config per call so toggling enforcePlanScope takes effect
+      // without restarting opencode, like the rest of the harness.
+      const config = loadJuninhoConfig(directory)
+      if (config.workflow?.implement?.enforcePlanScope !== true) return
+
+      const filePath = argFilePath(output.args)
+      if (!filePath) return
+
+      const planFiles = getPlanFiles(input.sessionID)
+
+      // No plan loaded — nothing to enforce
+      if (planFiles.size === 0) return
+
+      const relPath = path.relative(directory, filePath).replace(/\\/g, "/")
+      if (isEnforcementExempt(relPath)) return
+      if (isInPlanScope(planFiles, relPath)) return
+
+      throw new Error(
+        "[intent-gate] BLOCKED: " + relPath + " is not in the active plan's file scope. " +
+        "Add it via a follow-up task, ask the developer, or disable workflow.implement.enforcePlanScope."
+      )
+    },
+
     "tool.execute.after": async (
       input: { tool: string; sessionID: string; callID: string; args: any },
       output: { title: string; output: string; metadata: any }
     ) => {
-      if (input.tool === "Task" || input.tool === "task") {
+      if (toolIs(input.tool, "task")) {
         const prompt = typeof input.args?.prompt === "string" ? input.args.prompt.trim() : ""
         const contractArg = typeof input.args?.contract === "object" && input.args.contract
           ? input.args.contract as Record<string, unknown>
@@ -252,29 +286,25 @@ export default (async ({ directory }: { directory: string }) => {
         return
       }
 
-      if (!["Read", "Write", "Edit", "MultiEdit"].includes(input.tool)) return
+      if (!toolIs(input.tool, "read", "write", "edit")) return
 
-      const filePath: string = input.args?.path ?? input.args?.file_path ?? ""
+      const filePath = argFilePath(input.args)
       if (!filePath) return
 
       const scopeWarning = repoScopeWarning(directory, input.sessionID, filePath, routingHintsBySession)
       if (scopeWarning) output.output += "\n\n" + scopeWarning
 
-      if (!["Write", "Edit", "MultiEdit"].includes(input.tool)) return
+      if (!toolIs(input.tool, "write", "edit")) return
 
       const planFiles = getPlanFiles(input.sessionID)
 
       // No plan loaded — nothing to guard
       if (planFiles.size === 0) return
 
-      const relPath = path.relative(directory, filePath).replace(/\\\\/g, "/")
+      const relPath = path.relative(directory, filePath).replace(/\\/g, "/")
 
       // Check if the modified file matches any plan reference
-      const inScope = [...planFiles].some(
-        (pf) => relPath.endsWith(pf) || relPath.includes(pf) || pf.includes(relPath)
-      )
-
-      if (!inScope) {
+      if (!isInPlanScope(planFiles, relPath)) {
         output.output +=
           "\n\n[intent-gate] ⚠ SCOPE WARNING: [" + relPath + "] is not referenced in the current plan. " +
           "Verify this change is necessary for the current task before continuing."

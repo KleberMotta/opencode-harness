@@ -8,6 +8,7 @@ import {
 } from "../lib/j.feature-state-paths"
 import { loadJuninhoConfig } from "../lib/j.juninho-config"
 import { resolveStateFile } from "../lib/j.state-paths"
+import { toolIs } from "../lib/j.tool-compat"
 import { loadActivePlanTarget, loadActivePlanTargets, resolveProjectPaths } from "../lib/j.workspace-paths"
 
 type RuntimeTaskMetadata = {
@@ -272,10 +273,10 @@ function loadTaskContract(directory: string, args: Record<string, unknown>): Tas
   }
 }
 
+// NOTE: metadata/contract/runtime persistence is ALWAYS active — carl-inject and
+// intent-gate depend on these files. Only the watchdog sweep + automatic retry
+// are gated by workflow.implement.watchdogSessionStale (see plugin factory below).
 function buildMetadata(directory: string, parentSessionID: string, prompt: string, args: Record<string, unknown>): RuntimeTaskMetadata | null {
-  const config = loadJuninhoConfig(directory)
-  if (config.workflow?.implement?.watchdogSessionStale === false) return null
-
   const activePlan = loadActivePlan(directory)
   const taskContract = loadTaskContract(directory, args)
   const matchedTarget = selectMatchingWriteTarget(prompt, activePlan)
@@ -675,7 +676,7 @@ export default (async ({ directory, client }: { directory: string; client?: any 
       input: { tool: string; sessionID: string },
       output: { args: Record<string, unknown> }
     ) => {
-      if (input.tool !== "Task" && input.tool !== "task") return
+      if (!toolIs(input.tool, "task")) return
 
       const prompt = typeof output.args?.prompt === "string" ? output.args.prompt : ""
       const metadata = buildMetadata(directory, input.sessionID, prompt, output.args)

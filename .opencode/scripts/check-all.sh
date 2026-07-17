@@ -22,6 +22,36 @@ case "$STACK" in
       echo "[juninho:check-all] Maven stack detected but neither ./mvnw nor mvn available — skipping."
       exit 0
     }
+
+    if maven_dependencies_required; then
+      echo "[juninho:check-all] Dependências locais down — subindo via 'make dependencies'..."
+      make dependencies || true
+      __deps_wait=0
+      while maven_dependencies_required && [ "$__deps_wait" -lt 30 ]; do
+        sleep 2
+        __deps_wait=$((__deps_wait + 2))
+      done
+    fi
+
+    if maven_dependencies_required; then
+      echo ""
+      echo "┌─────────────────────────────────────────────────────────────────┐"
+      echo "│ DEPENDÊNCIAS LOCAIS DOWN                                        │"
+      echo "│                                                                 │"
+      echo "│ Este projeto tem docker-compose.yml + Makefile com 'dependencies'│"
+      echo "│ e testes Spring (@SpringBootTest/@DataJpaTest/@WebMvcTest), mas  │"
+      echo "│ os containers não subiram nem após 'make dependencies'.          │"
+      echo "│                                                                 │"
+      echo "│ Sem dependências up, integration tests falham com erros não     │"
+      echo "│ óbvios (NPE no Spring context, MockitoException, 500 em Feign). │"
+      echo "│                                                                 │"
+      echo "│ Fix: rode \`make dependencies\` manualmente, confira o Docker,     │"
+      echo "│ e rode \`/j.check\` de novo.                                       │"
+      echo "└─────────────────────────────────────────────────────────────────┘"
+      echo ""
+      exit 1
+    fi
+
     echo "[juninho:check-all] Running formatting checks (spotless)..."
     if pom_has_plugin spotless-maven-plugin; then
       $MVN -q spotless:check

@@ -91,7 +91,7 @@
     <answer>cashout-balance-context=ready</answer>
   </qa_pair>
   <qa_pair>
-    <question>Run `/j.implement task 1` for the active plan and answer exactly `implement-loop=ready` only if the harness completes that single task through the intended path: creates `src/main/kotlin/br/com/olx/trp/financial/FooService.kt`, commits it on `feature/feature-x`, writes validator output, and records task bookkeeping in `docs/specs/feature-x/state/integration-state.json`. Then answer only with that result.</question>
+    <question>Run `/j.implement` for the active plan and answer exactly `implement-loop=ready` only if the harness completes the plan through the intended path: creates `src/main/kotlin/br/com/olx/trp/financial/FooService.kt`, commits it on `feature/feature-x`, executes the plan's explicit validator task recording `## Verdict: APPROVED` in `docs/specs/feature-x/state/tasks/task-1/validator-work.md`, and records task bookkeeping in `docs/specs/feature-x/state/integration-state.json`. Then answer only with that result.</question>
     <preferred_tool>task</preferred_tool>
     <max_tool_calls>3</max_tool_calls>
     <max_duration_ms>90000</max_duration_ms>

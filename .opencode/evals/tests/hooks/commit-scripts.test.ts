@@ -13,6 +13,11 @@ import {
 
 const tempDirs: string[] = []
 
+// The sandbox repo doubles as workspace root and target repo, so scripts that
+// source _resolve-repo.sh need the explicit workspace opt-in (same pattern as
+// feature-integration.test.ts). pre-commit.sh exports it by itself.
+const harnessEnv = { ...process.env, ALLOW_WORKSPACE_GIT: "1" }
+
 afterEach(() => {
   while (tempDirs.length > 0) {
     removeDir(tempDirs.pop()!)
@@ -25,7 +30,7 @@ function setupRepo(options?: { failSpotless?: boolean; failCompile?: boolean; fa
   createGitRepo(root)
   scaffoldHarnessRepo(root)
   createFakeBuildTools(root, options)
-  runCommand("sh", [".opencode/scripts/install-git-hooks.sh"], { cwd: root })
+  runCommand("sh", [".opencode/scripts/install-git-hooks.sh"], { cwd: root, env: harnessEnv })
   return root
 }
 
@@ -49,10 +54,10 @@ describe("commit path scripts", () => {
     expect(result.status).toBe(1)
     const combinedOutput = result.stdout + result.stderr
     expect(combinedOutput).toContain("[juninho:pre-commit] Running structure lint...")
-    expect(combinedOutput).not.toContain("[juninho:pre-commit] Running build verification...")
+    expect(combinedOutput).not.toContain("[juninho:pre-commit] Running related tests...")
 
     const log = readLogLines(path.join(root, ".mvnw.log"))
-    expect(log).toEqual(["spotless:check"])
+    expect(log).toEqual(["-q spotless:check"])
     expect(runCommand("git", ["rev-parse", "HEAD"], { cwd: root }).status).toBe(128)
   })
 
@@ -68,15 +73,13 @@ describe("commit path scripts", () => {
     expect(result.status).toBe(0)
     const combinedOutput = result.stdout + result.stderr
     expect(combinedOutput).toContain("[juninho:pre-commit] Running structure lint...")
-    expect(combinedOutput).toContain("[juninho:pre-commit] Running build verification...")
     expect(combinedOutput).toContain("[juninho:pre-commit] Running related tests...")
     expect(combinedOutput).toContain("[juninho:pre-commit] Local checks passed")
 
     const log = readLogLines(path.join(root, ".mvnw.log"))
     expect(log).toEqual([
-      "spotless:check",
-      "-q -DskipTests compile test-compile",
-      'test -Dsurefire.failIfNoSpecifiedTests=false -Dtest=FooServiceTest',
+      "-q spotless:check",
+      "-q test -Dtest=FooServiceTest,FooServiceIT -DfailIfNoTests=false -Dsurefire.failIfNoSpecifiedTests=false",
     ])
     expect(runCommand("git", ["rev-list", "--count", "HEAD"], { cwd: root }).stdout.trim()).toBe("1")
   })
@@ -92,8 +95,8 @@ describe("commit path scripts", () => {
 
     expect(result.status).toBe(0)
     const combinedOutput = result.stdout + result.stderr
-    expect(combinedOutput).toContain("No Kotlin/Java files staged. Skipping tests.")
-    expect(readLogLines(path.join(root, ".mvnw.log"))).toEqual(["spotless:check", "-q -DskipTests compile test-compile"])
+    expect(combinedOutput).toContain("[juninho:test-related] Stack: maven — no .java/.kt staged files. Skipping.")
+    expect(readLogLines(path.join(root, ".mvnw.log"))).toEqual(["-q spotless:check"])
   })
 
   test("check-all runs branch switch attempt, formatting, build, and full tests", () => {
@@ -101,19 +104,19 @@ describe("commit path scripts", () => {
 
     const result = runCommand("sh", [".opencode/scripts/check-all.sh"], {
       cwd: root,
-      env: process.env,
+      env: harnessEnv,
     })
 
     expect(result.status).toBe(0)
-    expect(result.stdout).toContain("[juninho:check-all] Running formatting checks...")
-    expect(result.stdout).toContain("[juninho:check-all] Running build verification...")
-    expect(result.stdout).toContain("[juninho:check-all] Running repo-wide tests...")
+    expect(result.stdout).toContain("[juninho:check-all] Running on branch:")
+    expect(result.stdout).toContain("[juninho:check-all] Stack: maven")
+    expect(result.stdout).toContain("[juninho:check-all] Running formatting checks (spotless)...")
+    expect(result.stdout).toContain("[juninho:check-all] Running full verify (compile + tests + plugins)...")
 
     const log = readLogLines(path.join(root, ".mvnw.log"))
     expect(log).toEqual([
-      "spotless:check",
-      "-q -DskipTests compile test-compile",
-      "test",
+      "-q spotless:check",
+      "-q verify",
     ])
   })
 })

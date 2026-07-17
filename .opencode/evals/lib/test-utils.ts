@@ -74,6 +74,8 @@ export function scaffoldHarnessRepo(root: string): void {
     ".opencode/scripts/run-test-scope.sh",
     ".opencode/scripts/check-all.sh",
     ".opencode/scripts/_resolve-repo.sh",
+    ".opencode/scripts/_detect-stack.sh",
+    ".opencode/scripts/_read-config.sh",
     ".opencode/scripts/harness-feature-integration.sh",
     ".opencode/scripts/scaffold-spec-state.sh",
     ".opencode/hooks/pre-commit",
@@ -95,13 +97,32 @@ set -e
 printf '%s\n' "$*" >> "${path.join(root, ".mvnw.log")}"
 case "$*" in
   *"spotless:check"*) ${options?.failSpotless ? "echo 'spotless failed' >&2; exit 1" : "exit 0"} ;;
-  *"-DskipTests compile test-compile"*) ${options?.failCompile ? "echo 'compile failed' >&2; exit 1" : "exit 0"} ;;
-  *" test"*|"test") ${options?.failTest ? "echo 'test failed' >&2; exit 1" : "exit 0"} ;;
+  *"-DskipTests verify"*) ${options?.failCompile ? "echo 'compile failed' >&2; exit 1" : "exit 0"} ;;
+  *" test "*|*" test"|"test"|*" verify"*|"verify") ${options?.failTest ? "echo 'test failed' >&2; exit 1" : "exit 0"} ;;
   *) exit 0 ;;
 esac
 `
   writeExecutable(path.join(root, "mvnw"), mvnw)
 
+  // Minimal pom.xml so _detect-stack.sh helpers see a Maven project with the
+  // spotless plugin configured (pom_has_plugin greps the artifactId). No
+  // <java.version> tag on purpose — maven_check_java_version must not gate on
+  // the eval host's JVM.
+  writeFileSync(
+    path.join(root, "pom.xml"),
+    [
+      "<project>",
+      "  <build><plugins><plugin>",
+      "    <artifactId>spotless-maven-plugin</artifactId>",
+      "  </plugin></plugins></build>",
+      "</project>",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+
+  // Makefile without a `dependencies:` target — the docker-compose dependency
+  // gate (maven_dependencies_required) must stay inert in the sandbox.
   writeFileSync(
     path.join(root, "Makefile"),
     "lint:\n\t./mvnw spotless:check\n",

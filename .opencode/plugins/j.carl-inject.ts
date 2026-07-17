@@ -1,8 +1,9 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { existsSync, readdirSync, readFileSync } from "fs"
 import path from "path"
-import { loadActivePlanTarget, loadActivePlanTargets, resolvePathFromProjectRoot, resolveProjectPaths } from "../lib/j.workspace-paths"
+import { contextAssetsDir, findContextRoot, loadActivePlanTarget, loadActivePlanTargets, resolvePathFromProjectRoot, resolveProjectPaths } from "../lib/j.workspace-paths"
 import { featureStateTaskPaths } from "../lib/j.feature-state-paths"
+import { argFilePath, toolIs } from "../lib/j.tool-compat"
 
 // CARL v3 = Context-Aware Retrieval Layer
 // Goals:
@@ -101,7 +102,7 @@ const GENERIC_CARL_KEYWORDS = new Set([
 const STARTUP_DOMAIN_SCORE_FLOOR_RATIO = 0.65
 const FLOW_DOMAINS_WITH_BALANCE_COMPANION = new Set(["Cashout", "Orders", "Order", "Operational-entry", "Inactive-fee"])
 const BALANCE_COMPANION_SIGNALS = ["available", "balance", "credit", "debit", "escrow", "loss", "reserve"]
-const STARTUP_SEEDED_SUBAGENTS = new Set(["j.implementer", "j.checker", "j.planner", "j.spec-writer"])
+const STARTUP_SEEDED_SUBAGENTS = new Set(["j.implementer", "j.checker", "j.planner", "j.spec-writer", "j.test-writer"])
 
 function shouldSeedStartupPrompt(prompt: string, subagentType?: string): boolean {
   if (subagentType && STARTUP_SEEDED_SUBAGENTS.has(subagentType)) return true
@@ -203,7 +204,9 @@ function matchKeyword(keyword: string, textWords: Set<string>, rawText: string):
   return pattern.test(rawText)
 }
 
-const MAX_CONTEXT_BYTES = 8000
+// Domain docs are added before principles (see inject* functions) so the most
+// feature-specific context wins the budget when both compete for space.
+const MAX_CONTEXT_BYTES = 12000
 
 class ContextCollector {
   private collected = new Map<string, CollectedEntry>()
@@ -408,7 +411,10 @@ function loadTaskContractSeed(directory: string, args: Record<string, unknown>):
 
 function markdownSection(body: string, title: string): string {
   const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  return body.match(new RegExp("^###\\s+" + escapedTitle + "\\s*$([\\s\\S]*?)(?=^###\\s+|^##\\s+Task\\s+|$)", "im"))?.[1]?.trim() ?? ""
+  // End-of-section lookahead must anchor on the next heading or the true end of
+  // input — a bare "$" with the "m" flag matches end-of-LINE, which would make
+  // the lazy capture stop immediately and return an empty section.
+  return body.match(new RegExp("^###\\s+" + escapedTitle + "\\s*$([\\s\\S]*?)(?=^###\\s+|^##\\s+Task\\s+|(?![\\s\\S]))", "im"))?.[1]?.trim() ?? ""
 }
 
 function parseFileList(raw: string): string[] {
@@ -513,6 +519,32 @@ function effectiveRecallKeywords(entry: PrincipleEntry | DomainEntry, options?: 
   return recall.filter((keyword) => !GENERIC_CARL_KEYWORDS.has(keyword))
 }
 
+// Bases whose docs/principles + docs/domain are scanned: the target project
+// roots first (project docs win the collector's first-added dedupe), then the
+// assets dir of any containing context ({context}/agent-context) — the
+// harness-wide precedence is project > context > workspace.
+function docsBaseRoots(directory: string, activePlanHints?: ActivePlanHints): string[] {
+  const targets = activeTargetsForHints(directory, activePlanHints ?? {})
+  const projectPathsList = targets.length > 0
+    ? targets.map((t) => resolveProjectPaths(directory, t)).filter((p): p is NonNullable<typeof p> => Boolean(p))
+    : [resolveProjectPaths(directory, {})].filter((p): p is NonNullable<typeof p> => Boolean(p))
+
+  const roots: string[] = []
+  const seen = new Set<string>()
+  for (const projectPaths of projectPathsList) {
+    if (seen.has(projectPaths.projectRoot)) continue
+    seen.add(projectPaths.projectRoot)
+    roots.push(projectPaths.projectRoot)
+  }
+  for (const projectPaths of projectPathsList) {
+    const contextAssets = contextAssetsDir(findContextRoot(directory, projectPaths.projectRoot))
+    if (!contextAssets || seen.has(contextAssets)) continue
+    seen.add(contextAssets)
+    roots.push(contextAssets)
+  }
+  return roots
+}
+
 function addPrinciples(
   directory: string,
   collector: ContextCollector,
@@ -520,17 +552,11 @@ function addPrinciples(
   rawText: string,
   options?: { includeAlways?: boolean; mode?: "startup" | "read"; testFocused?: boolean; activePlanHints?: ActivePlanHints }
 ): string[] {
-  const targets = activeTargetsForHints(directory, options?.activePlanHints ?? {})
-  const projectPathsList = targets.length > 0
-    ? targets.map((t) => resolveProjectPaths(directory, t)).filter((p): p is NonNullable<typeof p> => Boolean(p))
-    : [resolveProjectPaths(directory, {})].filter((p): p is NonNullable<typeof p> => Boolean(p))
-
   const addedKeys: string[] = []
   const seenManifests = new Set<string>()
 
-  for (const projectPaths of projectPathsList) {
-    const manifestRoot = projectPaths.principlesRoot
-    const manifestPathResolved = path.join(manifestRoot, "manifest")
+  for (const docsBase of docsBaseRoots(directory, options?.activePlanHints)) {
+    const manifestPathResolved = path.join(docsBase, "docs", "principles", "manifest")
     if (!existsSync(manifestPathResolved)) continue
     if (seenManifests.has(manifestPathResolved)) continue
     seenManifests.add(manifestPathResolved)
@@ -548,7 +574,7 @@ function addPrinciples(
 
       const filePath = path.isAbsolute(entry.file)
         ? entry.file
-        : resolvePathFromProjectRoot(projectPaths.projectRoot, entry.file)
+        : resolvePathFromProjectRoot(docsBase, entry.file)
       if (!existsSync(filePath)) continue
 
       const content = readFileSync(filePath, "utf-8")
@@ -566,16 +592,11 @@ function addDomains(
   rawText: string,
   options?: { mode?: "startup" | "read"; testFocused?: boolean; activePlanHints?: ActivePlanHints }
 ): string[] {
-  const targets = activeTargetsForHints(directory, options?.activePlanHints ?? {})
-  const projectPathsList = targets.length > 0
-    ? targets.map((t) => resolveProjectPaths(directory, t)).filter((p): p is NonNullable<typeof p> => Boolean(p))
-    : [resolveProjectPaths(directory, {})].filter((p): p is NonNullable<typeof p> => Boolean(p))
-
   const addedKeys: string[] = []
   const seenIndexes = new Set<string>()
 
-  for (const projectPaths of projectPathsList) {
-    const domainRoot = projectPaths.domainRoot
+  for (const docsBase of docsBaseRoots(directory, options?.activePlanHints)) {
+    const domainRoot = path.join(docsBase, "docs", "domain")
     const indexPath = path.join(domainRoot, "INDEX.md")
     if (!existsSync(indexPath)) continue
     if (seenIndexes.has(indexPath)) continue
@@ -692,8 +713,8 @@ export default (async ({ directory }: { directory: string }) => {
     const testFocused = isTestFocusedTask(taskContext, runtime)
     const activePlanHints = routingHintsForSession(seed, runtime)
     const addedKeys = [
-      ...addPrinciples(directory, collector, signals.keywords, signals.rawText, { includeAlways: true, mode: "startup", testFocused, activePlanHints }),
       ...addDomains(directory, collector, signals.keywords, signals.rawText, { mode: "startup", testFocused, activePlanHints }),
+      ...addPrinciples(directory, collector, signals.keywords, signals.rawText, { includeAlways: true, mode: "startup", testFocused, activePlanHints }),
     ]
     return collector.getNewEntries(addedKeys)
   }
@@ -712,8 +733,8 @@ export default (async ({ directory }: { directory: string }) => {
     const testFocused = isPromptTestFocused(signals.rawText)
     const activePlanHints = routingHintsForSession(seed, null)
     const addedKeys = [
-      ...addPrinciples(directory, collector, signals.keywords, signals.rawText, { includeAlways: true, mode: "startup", testFocused, activePlanHints }),
       ...addDomains(directory, collector, signals.keywords, signals.rawText, { mode: "startup", testFocused, activePlanHints }),
+      ...addPrinciples(directory, collector, signals.keywords, signals.rawText, { includeAlways: true, mode: "startup", testFocused, activePlanHints }),
     ]
     return collector.getNewEntries(addedKeys)
   }
@@ -754,7 +775,7 @@ export default (async ({ directory }: { directory: string }) => {
       input: { tool: string; sessionID: string },
       output: { args: Record<string, unknown> }
     ) => {
-      if (input.tool !== "Task" && input.tool !== "task") return
+      if (!toolIs(input.tool, "task")) return
 
       const subagentType = typeof output.args?.subagent_type === "string"
         ? output.args.subagent_type
@@ -803,9 +824,9 @@ export default (async ({ directory }: { directory: string }) => {
       input: { tool: string; sessionID: string; callID: string; args: any },
       output: { title: string; output: string; metadata: any }
     ) => {
-      if (input.tool !== "Read") return
+      if (!toolIs(input.tool, "read")) return
 
-      const filePath: string = input.args?.path ?? input.args?.file_path ?? ""
+      const filePath = argFilePath(input.args)
       if (!filePath) return
 
       const allKeywords = new Set<string>()
@@ -835,8 +856,8 @@ export default (async ({ directory }: { directory: string }) => {
       const runtime = loadRuntimeMetadata(directory, input.sessionID, seed)
       const activePlanHints = routingHintsForSession(seed, runtime)
       const addedKeys = [
-        ...addPrinciples(directory, collector, allKeywords, rawSignal, { includeAlways: true, mode: "read", testFocused, activePlanHints }),
         ...addDomains(directory, collector, allKeywords, rawSignal, { mode: "read", testFocused, activePlanHints }),
+        ...addPrinciples(directory, collector, allKeywords, rawSignal, { includeAlways: true, mode: "read", testFocused, activePlanHints }),
       ]
       if (addedKeys.length === 0) return
 

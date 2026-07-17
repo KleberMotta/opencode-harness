@@ -62,7 +62,11 @@ const IGNORED_DIRS = new Set([
   "tmp",
 ])
 
+// First-level workspace dirs that are harness/infra, never a repo-grouping context.
+export const CONTEXT_SPECIAL_DIRS = new Set([".opencode", "docs", "tmp", "node_modules"])
+
 const discoveryCache = new Map<string, string[]>()
+const contextRootCache = new Map<string, string>()
 
 function normalizePath(filePath: string): string {
   return filePath.replace(/\\/g, "/")
@@ -138,6 +142,41 @@ export function findContainingProjectRoot(workspaceRoot: string, targetPath: str
   }
 
   return null
+}
+
+// Context layer: a "context" is a first-level workspace dir that groups repos
+// (e.g. {workspace}/olxbr, {workspace}/KleberMotta). Its shared assets live in
+// {context}/agent-context/ (AGENTS.md, skills/, skill-map.json, docs/, ...).
+// Precedence across the harness: project > context > workspace.
+export function findContextRoot(workspaceRoot: string, filePath: string): string | null {
+  if (!filePath) return null
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot)
+  const relative = path.relative(normalizedWorkspaceRoot, path.resolve(filePath))
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null
+
+  const firstLevel = normalizePath(relative).split("/")[0]
+  if (!firstLevel || firstLevel.startsWith(".") || CONTEXT_SPECIAL_DIRS.has(firstLevel)) return null
+
+  const candidate = path.join(normalizedWorkspaceRoot, firstLevel)
+  const cached = contextRootCache.get(candidate)
+  if (cached) return cached
+
+  let result: string | null = null
+  try {
+    if (statSync(candidate).isDirectory()) result = candidate
+  } catch {
+    result = null
+  }
+  // Only cache hits: a context created after a negative lookup must become
+  // visible without a restart, and re-checking a miss is a single statSync.
+  if (result) contextRootCache.set(candidate, result)
+  return result
+}
+
+export function contextAssetsDir(contextRoot: string | null | undefined): string | null {
+  if (!contextRoot) return null
+  const assetsDir = path.join(contextRoot, "agent-context")
+  return existsSync(assetsDir) ? assetsDir : null
 }
 
 function scoreProjectMatch(workspaceRoot: string, projectRoot: string, text: string): number {

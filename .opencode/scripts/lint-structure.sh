@@ -24,6 +24,36 @@ case "$STACK" in
       exit 0
     }
     maven_check_java_version || exit 1
+    # Context-scoped detekt rules (infra for pillar A3): when the repo's
+    # context ({workspace}/{context}/agent-context/lint-rules/, where
+    # context = first path level of the repo relative to the workspace) ships
+    # a rules jar AND a detekt.yml config AND the detekt CLI is on PATH, run
+    # it as a blocking gate. Default rulesets stay disabled: only the team's
+    # custom rules (activated via detekt.yml) gate the commit — otherwise a
+    # legacy repo would fail on every default-ruleset finding. Test sources
+    # are included because rules like NoMockBean target test code.
+    # Missing jar, config, or binary → silent skip.
+    case "$ROOT_DIR" in
+      "$WORKSPACE_ROOT"/*)
+        __lint_ctx="${ROOT_DIR#"$WORKSPACE_ROOT"/}"
+        __lint_ctx="${__lint_ctx%%/*}"
+        __lint_rules_dir="$WORKSPACE_ROOT/$__lint_ctx/agent-context/lint-rules"
+        __lint_rules_jar="$__lint_rules_dir/rules.jar"
+        __lint_rules_cfg="$__lint_rules_dir/detekt.yml"
+        if [ -f "$__lint_rules_jar" ] && [ -f "$__lint_rules_cfg" ] && command -v detekt >/dev/null 2>&1; then
+          __lint_inputs=""
+          for __lint_dir in src/main/kotlin src/test/kotlin; do
+            [ -d "$__lint_dir" ] && __lint_inputs="${__lint_inputs:+$__lint_inputs,}$__lint_dir"
+          done
+          if [ -n "$__lint_inputs" ]; then
+            echo "[juninho:lint-structure] Stack: maven — running detekt (context rules: $__lint_ctx)"
+            detekt --plugins "$__lint_rules_jar" --disable-default-rulesets --config "$__lint_rules_cfg" --input "$__lint_inputs"
+          fi
+          unset __lint_inputs __lint_dir
+        fi
+        unset __lint_ctx __lint_rules_dir __lint_rules_jar __lint_rules_cfg
+        ;;
+    esac
     if pom_has_plugin spotless-maven-plugin; then
       echo "[juninho:lint-structure] Stack: maven — running $MVN spotless:check"
       $MVN -q spotless:check

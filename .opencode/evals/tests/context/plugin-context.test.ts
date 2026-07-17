@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { cpSync, existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "fs"
 import path from "path"
 import { loadPlugin, PluginHarness } from "../../lib/plugin-harness"
 import {
@@ -31,6 +31,14 @@ type MockSessionClient = {
 beforeEach(() => {
   tempRoot = createTempDir("juninho-context-")
   mkdirSync(path.join(tempRoot, ".opencode", "state"), { recursive: true })
+  // Hermetic config: loadJuninhoConfig walks ancestor directories, so without
+  // this file the developer's real workspace config (e.g. watchdogSessionStale:
+  // false) would leak into the tests and change plugin behavior.
+  writeFileSync(
+    path.join(tempRoot, ".opencode", "juninho-config.json"),
+    JSON.stringify({ workflow: { implement: { watchdogSessionStale: true } } }, null, 2) + "\n",
+    "utf-8"
+  )
   mkdirSync(path.join(tempRoot, ".opencode", "skills", "j.controller-writing"), { recursive: true })
   mkdirSync(path.join(tempRoot, ".opencode", "skills", "j.mapper-writing"), { recursive: true })
   mkdirSync(path.join(tempRoot, "docs", "principles"), { recursive: true })
@@ -167,6 +175,43 @@ function markdownPlanTask(options: {
   ].join("\n")
 }
 
+function twoTaskPlan(): string {
+  return [
+    "# Plan: Feature X",
+    "",
+    "- **Goal**: Test feature plan.",
+    "- **Spec**: docs/specs/feature-x/spec.md",
+    "- **Context**: docs/specs/feature-x/CONTEXT.md",
+    "- **Intent Type**: FEATURE",
+    "- **Complexity**: MEDIUM",
+    "",
+    "## Task 1 — Update settlement controller",
+    "- **Project**: test/repo",
+    "- **Wave**: 1",
+    "- **Agent**: j.implementer",
+    "- **Depends**: None",
+    "",
+    "### Action",
+    "TASK-ONE-ONLY-MARKER Update the settlement controller.",
+    "",
+    "### Done Criteria",
+    "- Controller updated.",
+    "",
+    "## Task 2 — Update payout mapper",
+    "- **Project**: test/repo",
+    "- **Wave**: 1",
+    "- **Agent**: j.implementer",
+    "- **Depends**: None",
+    "",
+    "### Action",
+    "TASK-TWO-ONLY-MARKER Update the payout mapper.",
+    "",
+    "### Done Criteria",
+    "- Mapper updated.",
+    "",
+  ].join("\n")
+}
+
 async function createHarness(pluginNames: string[], options?: { client?: MockSessionClient; directory?: string }) {
   const root = repoRoot()
   const plugins = []
@@ -174,6 +219,20 @@ async function createHarness(pluginNames: string[], options?: { client?: MockSes
     plugins.push(await loadPlugin(path.join(root, ".opencode", "plugins", pluginName), options?.directory ?? tempRoot, options))
   }
   return new PluginHarness(plugins)
+}
+
+// Context layer scaffold: {tempRoot}/ctx is a first-level workspace dir that
+// groups repos, with shared assets in {tempRoot}/ctx/agent-context and a
+// project at {tempRoot}/ctx/repo-a (empty .git dir satisfies
+// looksLikeProjectRoot). Must be created BEFORE the harness runs any plugin
+// hook — j.workspace-paths caches discovery results per path.
+function scaffoldContextLayer(): { contextAssets: string; projectRoot: string } {
+  const contextAssets = path.join(tempRoot, "ctx", "agent-context")
+  const projectRoot = path.join(tempRoot, "ctx", "repo-a")
+  mkdirSync(path.join(projectRoot, ".git"), { recursive: true })
+  mkdirSync(path.join(projectRoot, "src"), { recursive: true })
+  mkdirSync(contextAssets, { recursive: true })
+  return { contextAssets, projectRoot }
 }
 
 describe("context injection plugins", () => {
@@ -191,16 +250,233 @@ describe("context injection plugins", () => {
     expect(compactOutput.context.join("\n")).toContain("[plan-autoload] Active plan detected")
   })
 
+  test("plan-autoload injects only the task section into task-scoped child sessions", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "scoped-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Execute task 2\nAttempt: 1",
+          contract: {
+            taskID: "2",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "scoped-child-2",
+        info: { parentID: "scoped-parent", title: "Execute task 2 — foo (@j.implementer subagent)" },
+      },
+    })
+
+    const childOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "scoped-child-2" }, childOutput)
+    const system = typeof childOutput.message.system === "string" ? childOutput.message.system : ""
+    expect(system).toContain("task-scoped session for Task 2")
+    expect(system).toContain("Only Task 2's plan section")
+    expect(system).toContain("## Task 2")
+    expect(system).toContain("TASK-TWO-ONLY-MARKER")
+    expect(system).not.toContain("TASK-ONE-ONLY-MARKER")
+    expect(system).not.toContain("Active plan detected")
+  })
+
+  test("plan-autoload keeps the full plan for the parent session", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "scoped-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Execute task 2\nAttempt: 1",
+          contract: {
+            taskID: "2",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "scoped-child-2",
+        info: { parentID: "scoped-parent", title: "Execute task 2 — foo (@j.implementer subagent)" },
+      },
+    })
+
+    const parentOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "scoped-parent" }, parentOutput)
+    const system = typeof parentOutput.message.system === "string" ? parentOutput.message.system : ""
+    expect(system).toContain("[plan-autoload] Active plan detected")
+    expect(system).toContain("TASK-ONE-ONLY-MARKER")
+    expect(system).toContain("TASK-TWO-ONLY-MARKER")
+    expect(system).not.toContain("task-scoped session")
+  })
+
+  test("plan-autoload pairs hints by task id from the child session title", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "pairing-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Execute task 1\nAttempt: 1",
+          contract: {
+            taskID: "1",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "pairing-parent", callID: "2" },
+      {
+        args: {
+          prompt: "Execute task 2\nAttempt: 1",
+          contract: {
+            taskID: "2",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+
+    // Task 2's child is created FIRST: the queue pairs by task id from the
+    // title, not FIFO order.
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "pairing-child-2",
+        info: { parentID: "pairing-parent", title: "Execute task 2 — payout mapper (@j.implementer subagent)" },
+      },
+    })
+
+    const childTwoOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "pairing-child-2" }, childTwoOutput)
+    const childTwoSystem = typeof childTwoOutput.message.system === "string" ? childTwoOutput.message.system : ""
+    expect(childTwoSystem).toContain("task-scoped session for Task 2")
+    expect(childTwoSystem).toContain("TASK-TWO-ONLY-MARKER")
+    expect(childTwoSystem).not.toContain("TASK-ONE-ONLY-MARKER")
+
+    // The task-1 hint stays queued for the later task-1 child.
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "pairing-child-1",
+        info: { parentID: "pairing-parent", title: "Execute task 1 — settlement controller (@j.implementer subagent)" },
+      },
+    })
+
+    const childOneOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "pairing-child-1" }, childOneOutput)
+    const childOneSystem = typeof childOneOutput.message.system === "string" ? childOneOutput.message.system : ""
+    expect(childOneSystem).toContain("task-scoped session for Task 1")
+    expect(childOneSystem).toContain("TASK-ONE-ONLY-MARKER")
+    expect(childOneSystem).not.toContain("TASK-TWO-ONLY-MARKER")
+  })
+
+  test("plan-autoload does not mark non-task children as task-scoped", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    // An orphaned hint with a taskID sits in the queue, but the child title
+    // carries no "Execute task" marker, so the title (authoritative) wins and
+    // the session is not task-scoped.
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "nontask-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Execute task 1\nAttempt: 1",
+          contract: {
+            taskID: "1",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "nontask-child",
+        info: { parentID: "nontask-parent", title: "Run j.checker for feature-x" },
+      },
+    })
+
+    const childOutput = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "nontask-child" }, childOutput)
+    const system = typeof childOutput.message.system === "string" ? childOutput.message.system : ""
+    expect(system).toContain("[plan-autoload] Active plan detected")
+    expect(system).toContain("TASK-ONE-ONLY-MARKER")
+    expect(system).toContain("TASK-TWO-ONLY-MARKER")
+    expect(system).not.toContain("task-scoped session")
+  })
+
+  test("plan-autoload re-injects only the task section on compaction for task-scoped sessions", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "compact-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Execute task 2\nAttempt: 1",
+          contract: {
+            taskID: "2",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "compact-child-2",
+        info: { parentID: "compact-parent", title: "Execute task 2 — foo (@j.implementer subagent)" },
+      },
+    })
+
+    const compactOutput = { context: [] as string[] }
+    await harness.runCompaction({ sessionID: "compact-child-2" }, compactOutput)
+    const context = compactOutput.context.join("\n")
+    expect(context).toContain("task-scoped session for Task 2")
+    expect(context).toContain("TASK-TWO-ONLY-MARKER")
+    expect(context).not.toContain("TASK-ONE-ONLY-MARKER")
+    expect(context).not.toContain("Active plan detected")
+  })
+
   test("memory injects persistent context once per session and re-injects on compaction", async () => {
     writePersistentContext(tempRoot, "Always protect settlement invariants.")
     const harness = await createHarness(["j.memory.ts"])
 
     const firstOutput = { title: "Read", output: "body", metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "s-1", callID: "1", args: {} }, firstOutput)
+    await harness.runToolAfter({ tool: "read", sessionID: "s-1", callID: "1", args: {} }, firstOutput)
     expect(firstOutput.output).toContain("[memory] Project memory")
 
     const secondOutput = { title: "Read", output: "body", metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "s-1", callID: "2", args: {} }, secondOutput)
+    await harness.runToolAfter({ tool: "read", sessionID: "s-1", callID: "2", args: {} }, secondOutput)
     expect(secondOutput.output).not.toContain("[memory] Project memory")
 
     const compactOutput = { context: [] as string[] }
@@ -213,12 +489,12 @@ describe("context injection plugins", () => {
     const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
 
     const firstSession = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "s-1", callID: "1", args: { file_path: filePath } }, firstSession)
+    await harness.runToolAfter({ tool: "read", sessionID: "s-1", callID: "1", args: { filePath: filePath } }, firstSession)
     expect(firstSession.output).toContain("[directory-agents-injector] Context from src/AGENTS.md")
     expect(firstSession.output).toContain("[skill-inject] Skill activated for j.controller-writing")
 
     const secondSession = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "s-2", callID: "1", args: { file_path: filePath } }, secondSession)
+    await harness.runToolAfter({ tool: "read", sessionID: "s-2", callID: "1", args: { filePath: filePath } }, secondSession)
     expect(secondSession.output).toContain("[directory-agents-injector] Context from src/AGENTS.md")
     expect(secondSession.output).toContain("[skill-inject] Skill activated for j.controller-writing")
   })
@@ -229,12 +505,12 @@ describe("context injection plugins", () => {
     const nonTriggerPath = path.join(tempRoot, "src", "feature", "OutOfScope.kt")
 
     const mapperSession = { title: "Read", output: readFileSync(mapperPath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "mapper-s-1", callID: "1", args: { file_path: mapperPath } }, mapperSession)
+    await harness.runToolAfter({ tool: "read", sessionID: "mapper-s-1", callID: "1", args: { filePath: mapperPath } }, mapperSession)
     expect(mapperSession.output).toContain("[skill-inject] Skill activated for j.mapper-writing")
     expect(mapperSession.output).toContain("MAPPER-SKILL-MARKER")
 
     const nonTriggerSession = { title: "Read", output: readFileSync(nonTriggerPath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "mapper-s-2", callID: "1", args: { file_path: nonTriggerPath } }, nonTriggerSession)
+    await harness.runToolAfter({ tool: "read", sessionID: "mapper-s-2", callID: "1", args: { filePath: nonTriggerPath } }, nonTriggerSession)
     expect(nonTriggerSession.output).not.toContain("j.mapper-writing")
   })
 
@@ -252,11 +528,143 @@ describe("context injection plugins", () => {
     const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
 
     const session = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "multi-s-1", callID: "1", args: { file_path: filePath } }, session)
+    await harness.runToolAfter({ tool: "read", sessionID: "multi-s-1", callID: "1", args: { filePath: filePath } }, session)
 
     expect(session.output).toContain("[skill-inject] Skill activated for j.controller-writing")
     expect(session.output).toContain("[skill-inject] Skill activated for j.mapper-writing")
     expect(session.output).toContain("MAPPER-SKILL-MARKER")
+  })
+
+  test("skill-inject merges context-level skill map between project and workspace", async () => {
+    const { contextAssets, projectRoot } = scaffoldContextLayer()
+    writeFileSync(
+      path.join(contextAssets, "skill-map.json"),
+      JSON.stringify([
+        { pattern: "Service\\.kt$", skill: "j.ctx-only" },
+        { pattern: "Shared\\.kt$", skill: "j.shared-skill" },
+      ], null, 2) + "\n",
+      "utf-8"
+    )
+    mkdirSync(path.join(contextAssets, "skills", "j.ctx-only"), { recursive: true })
+    mkdirSync(path.join(contextAssets, "skills", "j.shared-skill"), { recursive: true })
+    writeFileSync(
+      path.join(contextAssets, "skills", "j.ctx-only", "SKILL.md"),
+      "---\nname: j.ctx-only\ndescription: context-only skill\n---\n\nCONTEXT-ONLY-SKILL-MARKER\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(contextAssets, "skills", "j.shared-skill", "SKILL.md"),
+      "---\nname: j.shared-skill\ndescription: context variant\n---\n\nCONTEXT-SHARED-SKILL-MARKER\n",
+      "utf-8"
+    )
+    mkdirSync(path.join(projectRoot, ".opencode", "skills", "j.shared-skill"), { recursive: true })
+    writeFileSync(
+      path.join(projectRoot, ".opencode", "skill-map.json"),
+      JSON.stringify([{ pattern: "Shared\\.kt$", skill: "j.shared-skill" }], null, 2) + "\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(projectRoot, ".opencode", "skills", "j.shared-skill", "SKILL.md"),
+      "---\nname: j.shared-skill\ndescription: project variant\n---\n\nPROJECT-SHARED-SKILL-MARKER\n",
+      "utf-8"
+    )
+    const servicePath = path.join(projectRoot, "src", "SampleService.kt")
+    const sharedPath = path.join(projectRoot, "src", "SampleShared.kt")
+    const controllerPath = path.join(projectRoot, "src", "CtxController.kt")
+    writeFileSync(servicePath, "class SampleService\n", "utf-8")
+    writeFileSync(sharedPath, "class SampleShared\n", "utf-8")
+    writeFileSync(controllerPath, "class CtxController\n", "utf-8")
+
+    const harness = await createHarness(["j.skill-inject.ts"])
+
+    // A project file matching only the context map pattern gets the context skill.
+    const serviceRead = { title: "Read", output: readFileSync(servicePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-skill-s1", callID: "1", args: { filePath: servicePath } }, serviceRead)
+    expect(serviceRead.output).toContain("[skill-inject] Skill activated for j.ctx-only (context)")
+    expect(serviceRead.output).toContain("CONTEXT-ONLY-SKILL-MARKER")
+
+    // Same skill mapped in project and context: project wins the merge.
+    const sharedRead = { title: "Read", output: readFileSync(sharedPath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-skill-s2", callID: "1", args: { filePath: sharedPath } }, sharedRead)
+    expect(sharedRead.output).toContain("[skill-inject] Skill activated for j.shared-skill (project)")
+    expect(sharedRead.output).toContain("PROJECT-SHARED-SKILL-MARKER")
+    expect(sharedRead.output).not.toContain("CONTEXT-SHARED-SKILL-MARKER")
+
+    // Workspace entries survive the merge for skills not shadowed by project/context.
+    const controllerRead = { title: "Read", output: readFileSync(controllerPath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-skill-s3", callID: "1", args: { filePath: controllerPath } }, controllerRead)
+    expect(controllerRead.output).toContain("[skill-inject] Skill activated for j.controller-writing (workspace)")
+  })
+
+  test("directory-agents-injector includes context-level AGENTS.md before nested ones", async () => {
+    const { contextAssets, projectRoot } = scaffoldContextLayer()
+    writeFileSync(path.join(contextAssets, "AGENTS.md"), "# Context Rules\n\nCONTEXT-AGENTS-MARKER\n", "utf-8")
+    writeFileSync(path.join(projectRoot, "src", "AGENTS.md"), "# Repo Src Rules\n\nNESTED-AGENTS-MARKER\n", "utf-8")
+    writeFileSync(path.join(tempRoot, "AGENTS.md"), "# Workspace Root Rules\n\nWORKSPACE-ROOT-AGENTS-MARKER\n", "utf-8")
+    const fooPath = path.join(projectRoot, "src", "foo.ts")
+    writeFileSync(fooPath, "export const foo = 1\n", "utf-8")
+
+    const harness = await createHarness(["j.directory-agents-injector.ts"])
+    const read = { title: "Read", output: readFileSync(fooPath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-agents-s1", callID: "1", args: { filePath: fooPath } }, read)
+
+    expect(read.output).toContain("[directory-agents-injector] Context from ctx/agent-context/AGENTS.md")
+    expect(read.output).toContain("CONTEXT-AGENTS-MARKER")
+    expect(read.output).toContain("[directory-agents-injector] Context from src/AGENTS.md")
+    expect(read.output).toContain("NESTED-AGENTS-MARKER")
+    // Context AGENTS.md is more general than anything nested in the project: it comes first.
+    expect(read.output.indexOf("CONTEXT-AGENTS-MARKER")).toBeLessThan(read.output.indexOf("NESTED-AGENTS-MARKER"))
+    // Workspace-root AGENTS.md stays out — OpenCode auto-loads it.
+    expect(read.output).not.toContain("WORKSPACE-ROOT-AGENTS-MARKER")
+  })
+
+  test("carl-inject loads principles from context assets", async () => {
+    const { contextAssets, projectRoot } = scaffoldContextLayer()
+    mkdirSync(path.join(contextAssets, "docs", "principles"), { recursive: true })
+    writeFileSync(
+      path.join(contextAssets, "docs", "principles", "manifest"),
+      [
+        "CTXPAY_STATE=active",
+        "CTXPAY_RECALL=settlement,payout",
+        "CTXPAY_FILE=docs/principles/ctx-payment.md",
+        "CTXPAY_PRIORITY=1",
+        "CTXOTHER_STATE=active",
+        "CTXOTHER_RECALL=inventory,warehouse",
+        "CTXOTHER_FILE=docs/principles/ctx-inventory.md",
+        "CTXOTHER_PRIORITY=2",
+        "",
+      ].join("\n"),
+      "utf-8"
+    )
+    writeFileSync(path.join(contextAssets, "docs", "principles", "ctx-payment.md"), "# Context Payment Patterns\nCONTEXT-PRINCIPLE-MARKER\n", "utf-8")
+    writeFileSync(path.join(contextAssets, "docs", "principles", "ctx-inventory.md"), "# Context Inventory Patterns\nCONTEXT-INVENTORY-DISTRACTOR\n", "utf-8")
+    const servicePath = path.join(projectRoot, "src", "SettlementService.kt")
+    writeFileSync(servicePath, "class SettlementService { fun handle() = Unit } // settlement payout flow\n", "utf-8")
+
+    const harness = await createHarness(["j.carl-inject.ts"])
+    const read = { title: "Read", output: readFileSync(servicePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-carl-s1", callID: "1", args: { filePath: servicePath } }, read)
+
+    expect(read.output).toContain("[carl-inject] Principle (CTXPAY)")
+    expect(read.output).toContain("CONTEXT-PRINCIPLE-MARKER")
+    expect(read.output).not.toContain("CONTEXT-INVENTORY-DISTRACTOR")
+  })
+
+  test("workspace without contexts behaves exactly as before", async () => {
+    // Sanity: no ctx/ dir in this tempRoot, so the pre-context flow must be
+    // untouched — workspace skill-map and nested AGENTS.md keep working,
+    // sourced from the workspace layer. The remaining suite (plan-autoload,
+    // carl, task-runtime tests above) also runs entirely without contexts.
+    const harness = await createHarness(["j.directory-agents-injector.ts", "j.skill-inject.ts"])
+    const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
+
+    const read = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "no-ctx-s1", callID: "1", args: { filePath: filePath } }, read)
+
+    expect(read.output).toContain("[skill-inject] Skill activated for j.controller-writing (workspace)")
+    expect(read.output).toContain("[directory-agents-injector] Context from src/AGENTS.md")
+    expect(read.output).not.toContain("(context)")
+    expect(read.output).not.toContain("(project)")
   })
 
   test("carl preloads task-scoped and canonical context for child sessions before reads", async () => {
@@ -266,7 +674,7 @@ describe("context injection plugins", () => {
     const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-1", callID: "1" },
+      { tool: "task", sessionID: "parent-1", callID: "1" },
       {
         args: {
           prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt",
@@ -302,7 +710,7 @@ describe("context injection plugins", () => {
     expect(startupOutput.message.system).toContain("Use this before searching the repo")
 
     const firstOutput = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "child-1", callID: "1", args: { file_path: filePath } }, firstOutput)
+    await harness.runToolAfter({ tool: "read", sessionID: "child-1", callID: "1", args: { filePath: filePath } }, firstOutput)
     expect(firstOutput.output).not.toContain("[carl-inject] Principle (API)")
     expect(firstOutput.output).not.toContain("[carl-inject] Domain (Orders / orders.md)")
 
@@ -311,7 +719,7 @@ describe("context injection plugins", () => {
     expect(compactOutput.context.join("\n")).toContain("Previously injected context")
 
     const secondOutput = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
-    await harness.runToolAfter({ tool: "Read", sessionID: "child-2", callID: "1", args: { file_path: filePath } }, secondOutput)
+    await harness.runToolAfter({ tool: "read", sessionID: "child-2", callID: "1", args: { filePath: filePath } }, secondOutput)
     expect(secondOutput.output).toContain("[carl-inject] Principle (API)")
   })
 
@@ -356,7 +764,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-markdown-plan", callID: "1" },
+      { tool: "task", sessionID: "parent-markdown-plan", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1" } }
     )
     await harness.runEvent({
@@ -392,7 +800,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-orders", callID: "1" },
+      { tool: "task", sessionID: "parent-orders", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-orders", info: { parentID: "parent-orders", title: "Execute task 1" } } })
@@ -426,7 +834,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-cashout", callID: "1" },
+      { tool: "task", sessionID: "parent-cashout", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-cashout", info: { parentID: "parent-cashout", title: "Execute task 1" } } })
@@ -481,7 +889,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-async", callID: "1" },
+      { tool: "task", sessionID: "parent-async", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-async", info: { parentID: "parent-async", title: "Execute task 1" } } })
@@ -516,7 +924,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-dual", callID: "1" },
+      { tool: "task", sessionID: "parent-dual", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-dual", info: { parentID: "parent-dual", title: "Execute task 1" } } })
@@ -551,7 +959,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-cashout-balance", callID: "1" },
+      { tool: "task", sessionID: "parent-cashout-balance", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-cashout-balance", info: { parentID: "parent-cashout-balance", title: "Execute task 1" } } })
@@ -611,7 +1019,7 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.task-runtime.ts", "j.carl-inject.ts"])
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-real", callID: "1" },
+      { tool: "task", sessionID: "parent-real", callID: "1" },
       { args: { prompt: "Execute task 1\nAttempt: 1\nFocus on src/feature/SampleController.kt" } }
     )
     await harness.runEvent({ type: "session.created", properties: { sessionID: "child-real", info: { parentID: "parent-real", title: "Execute task 1" } } })
@@ -644,7 +1052,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.carl-inject.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-check", callID: "1" },
+      { tool: "task", sessionID: "parent-check", callID: "1" },
       {
         args: {
           subagent_type: "j.checker",
@@ -679,7 +1087,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.carl-inject.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-plan", callID: "1" },
+      { tool: "task", sessionID: "parent-plan", callID: "1" },
       {
         args: {
           subagent_type: "j.planner",
@@ -712,7 +1120,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.carl-inject.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-spec", callID: "1" },
+      { tool: "task", sessionID: "parent-spec", callID: "1" },
       {
         args: {
           subagent_type: "j.spec-writer",
@@ -740,20 +1148,259 @@ describe("context injection plugins", () => {
     expect(startupOutput.message.system).not.toContain("Domain (Web / web.md)")
   })
 
+  test("intent-gate blocks out-of-scope edits when enforcePlanScope is enabled", async () => {
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "juninho-config.json"),
+      JSON.stringify({ workflow: { implement: { watchdogSessionStale: true, enforcePlanScope: true } } }, null, 2) + "\n",
+      "utf-8"
+    )
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.intent-gate.ts"])
+
+    // Out-of-scope edit is rejected before execution.
+    await expect(
+      harness.runToolBefore(
+        { tool: "edit", sessionID: "enforce-s1", callID: "1" },
+        { args: { filePath: path.join(tempRoot, "src", "feature", "OutOfScope.kt") } }
+      )
+    ).rejects.toThrow("[intent-gate] BLOCKED")
+
+    // In-scope edit passes through untouched.
+    await harness.runToolBefore(
+      { tool: "edit", sessionID: "enforce-s1", callID: "2" },
+      { args: { filePath: path.join(tempRoot, "src", "feature", "SampleController.kt") } }
+    )
+
+    // Workflow bookkeeping (spec state) stays writable even under enforcement.
+    await harness.runToolBefore(
+      { tool: "edit", sessionID: "enforce-s1", callID: "3" },
+      { args: { filePath: path.join(tempRoot, "docs", "specs", "feature-x", "state", "implementer-work.md") } }
+    )
+
+    // enforcePlanScope=false (config re-read per call): the before hook never
+    // throws, and the after hook still appends the advisory warning.
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "juninho-config.json"),
+      JSON.stringify({ workflow: { implement: { watchdogSessionStale: true, enforcePlanScope: false } } }, null, 2) + "\n",
+      "utf-8"
+    )
+    const outOfScopeArgs = { filePath: path.join(tempRoot, "src", "feature", "OutOfScope.kt") }
+    await harness.runToolBefore({ tool: "edit", sessionID: "enforce-s2", callID: "1" }, { args: outOfScopeArgs })
+    const afterOutput = { title: "Edit", output: "ok", metadata: {} }
+    await harness.runToolAfter({ tool: "edit", sessionID: "enforce-s2", callID: "1", args: outOfScopeArgs }, afterOutput)
+    expect(afterOutput.output).toContain("[intent-gate] ⚠ SCOPE WARNING")
+  })
+
+  test("intent-gate unblocks a file added to the plan mid-session", async () => {
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "juninho-config.json"),
+      JSON.stringify({ workflow: { implement: { watchdogSessionStale: true, enforcePlanScope: true } } }, null, 2) + "\n",
+      "utf-8"
+    )
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.intent-gate.ts"])
+    const outOfScopeArgs = { filePath: path.join(tempRoot, "src", "feature", "OutOfScope.kt") }
+
+    await expect(
+      harness.runToolBefore({ tool: "edit", sessionID: "unblock-s1", callID: "1" }, { args: outOfScopeArgs })
+    ).rejects.toThrow("[intent-gate] BLOCKED")
+
+    // The developer adds the file to the plan mid-session. The mtime bump makes
+    // the plugin's mtime-keyed plan cache observe the edit deterministically.
+    const planPath = path.join(tempRoot, "docs", "specs", "feature-x", "plan.md")
+    writeFileSync(
+      planPath,
+      markdownPlanTask({
+        files: ["src/feature/SampleController.kt", "src/feature/OutOfScope.kt"],
+        action: "Update the payment settlement controller and its helper.",
+        done: "Controller delegates to the correct service.",
+      }),
+      "utf-8"
+    )
+    utimesSync(planPath, new Date(), new Date(Date.now() + 10_000))
+
+    // Same session: the recomputed plan scope unblocks the edit.
+    await harness.runToolBefore({ tool: "edit", sessionID: "unblock-s1", callID: "2" }, { args: outOfScopeArgs })
+  })
+
+  test("intent-gate allows extensionless and long-suffix plan files under enforcement", async () => {
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "juninho-config.json"),
+      JSON.stringify({ workflow: { implement: { watchdogSessionStale: true, enforcePlanScope: true } } }, null, 2) + "\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"),
+      markdownPlanTask({
+        files: ["Dockerfile", "build.gradle"],
+        action: "Update the container build inputs.",
+        done: "Build inputs updated.",
+      }),
+      "utf-8"
+    )
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.intent-gate.ts"])
+
+    // Backtick-quoted Files entries cover extensionless files (Dockerfile) and
+    // long-suffix files (build.gradle): both stay editable under enforcement.
+    await harness.runToolBefore(
+      { tool: "edit", sessionID: "buildfiles-s1", callID: "1" },
+      { args: { filePath: path.join(tempRoot, "Dockerfile") } }
+    )
+    await harness.runToolBefore(
+      { tool: "edit", sessionID: "buildfiles-s1", callID: "2" },
+      { args: { filePath: path.join(tempRoot, "build.gradle") } }
+    )
+
+    // Enforcement stays active for files outside the plan scope.
+    await expect(
+      harness.runToolBefore(
+        { tool: "edit", sessionID: "buildfiles-s1", callID: "3" },
+        { args: { filePath: path.join(tempRoot, "src", "feature", "OutOfScope.kt") } }
+      )
+    ).rejects.toThrow("[intent-gate] BLOCKED")
+  })
+
+  test("telemetry plugin appends metrics for step_finish events", async () => {
+    // Active plan with a slug routes metrics into the feature state dir.
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "state", "active-plan.json"),
+      JSON.stringify({
+        slug: "feature-x",
+        planPath: "docs/specs/feature-x/plan.md",
+        specPath: "docs/specs/feature-x/spec.md",
+        contextPath: "docs/specs/feature-x/CONTEXT.md",
+        writeTargets: [{ project: "test/repo", targetRepoRoot: tempRoot }],
+      }, null, 2) + "\n",
+      "utf-8"
+    )
+    const harness = await createHarness(["j.telemetry.ts"])
+    const metricsPath = path.join(tempRoot, "docs", "specs", "feature-x", "state", "metrics.jsonl")
+
+    const stepFinishEvent = (id: string, cost: number) => ({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          type: "step-finish",
+          id,
+          sessionID: "tel-s1",
+          messageID: "msg-1",
+          cost,
+          tokens: { input: 120, output: 40, reasoning: 8, cache: { read: 10, write: 2 } },
+        },
+      },
+    })
+
+    await harness.runEvent(stepFinishEvent("part-1", 0.25))
+
+    const lines = readFileSync(metricsPath, "utf-8").trim().split("\n")
+    expect(lines).toHaveLength(1)
+    const entry = JSON.parse(lines[0]) as {
+      ts?: string
+      event?: string
+      sessionID?: string
+      messageID?: string
+      cost?: number
+      tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } }
+    }
+    expect(typeof entry.ts).toBe("string")
+    expect(entry.event).toBe("step_finish")
+    expect(entry.sessionID).toBe("tel-s1")
+    expect(entry.messageID).toBe("msg-1")
+    expect(entry.cost).toBe(0.25)
+    expect(entry.tokens?.input).toBe(120)
+    expect(entry.tokens?.output).toBe(40)
+    expect(entry.tokens?.reasoning).toBe(8)
+    expect(entry.tokens?.cache?.read).toBe(10)
+    expect(entry.tokens?.cache?.write).toBe(2)
+
+    // Same part id with the same cost/token fingerprint dedupes (streaming re-emit).
+    await harness.runEvent(stepFinishEvent("part-1", 0.25))
+    expect(readFileSync(metricsPath, "utf-8").trim().split("\n")).toHaveLength(1)
+
+    // Disabled config: nothing else is appended. The mtime bump makes the
+    // plugin's mtime-keyed config cache observe the new file deterministically.
+    const configPath = path.join(tempRoot, ".opencode", "juninho-config.json")
+    writeFileSync(
+      configPath,
+      JSON.stringify({ workflow: { implement: { watchdogSessionStale: true }, telemetry: { enabled: false } } }, null, 2) + "\n",
+      "utf-8"
+    )
+    utimesSync(configPath, new Date(), new Date(Date.now() + 10_000))
+    await harness.runEvent(stepFinishEvent("part-2", 0.75))
+    expect(readFileSync(metricsPath, "utf-8").trim().split("\n")).toHaveLength(1)
+  })
+
+  test("telemetry correlates sessions to feature sinks and never resurrects feature state", async () => {
+    // Active plan points at a feature whose state dir no longer exists (stale
+    // pointer after cleanup); a session runtime file binds tel-corr-s1 to
+    // feature-y instead.
+    writeFileSync(
+      path.join(tempRoot, ".opencode", "state", "active-plan.json"),
+      JSON.stringify({
+        slug: "feature-gone",
+        planPath: "docs/specs/feature-gone/plan.md",
+        specPath: "docs/specs/feature-gone/spec.md",
+        contextPath: "docs/specs/feature-gone/CONTEXT.md",
+        writeTargets: [{ project: "test/repo", targetRepoRoot: tempRoot }],
+      }, null, 2) + "\n",
+      "utf-8"
+    )
+    const sessionsDir = path.join(tempRoot, "docs", "specs", "feature-y", "state", "sessions")
+    mkdirSync(sessionsDir, { recursive: true })
+    writeFileSync(
+      path.join(sessionsDir, "tel-corr-s1-runtime.json"),
+      JSON.stringify({ ownerSessionID: "tel-corr-s1", taskID: "1" }, null, 2) + "\n",
+      "utf-8"
+    )
+
+    const harness = await createHarness(["j.telemetry.ts"])
+    const stepFinishEvent = (sessionID: string, id: string) => ({
+      type: "message.part.updated",
+      properties: {
+        part: {
+          type: "step-finish",
+          id,
+          sessionID,
+          messageID: "msg-1",
+          cost: 0.1,
+          tokens: { input: 10, output: 5, reasoning: 1, cache: { read: 0, write: 0 } },
+        },
+      },
+    })
+
+    // Session runtime correlation wins over the active-plan pointer.
+    await harness.runEvent(stepFinishEvent("tel-corr-s1", "part-1"))
+    const featureSink = path.join(tempRoot, "docs", "specs", "feature-y", "state", "metrics.jsonl")
+    const featureLines = readFileSync(featureSink, "utf-8").trim().split("\n")
+    expect(featureLines).toHaveLength(1)
+    expect((JSON.parse(featureLines[0]) as { sessionID?: string }).sessionID).toBe("tel-corr-s1")
+
+    // Uncorrelated session falls back to the stale active-plan slug, whose
+    // state dir is gone: the line goes to the global sink and the feature
+    // state dir is NOT recreated.
+    await harness.runEvent(stepFinishEvent("tel-corr-s2", "part-2"))
+    const globalSink = path.join(tempRoot, ".opencode", "state", "metrics.jsonl")
+    const globalLines = readFileSync(globalSink, "utf-8").trim().split("\n")
+    expect(globalLines).toHaveLength(1)
+    expect((JSON.parse(globalLines[0]) as { sessionID?: string }).sessionID).toBe("tel-corr-s2")
+    expect(existsSync(path.join(tempRoot, "docs", "specs", "feature-gone"))).toBe(false)
+  })
+
   test("intent gate warns only for out-of-plan writes", async () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.intent-gate.ts"])
 
     const inScope = { title: "Edit", output: "ok", metadata: {} }
     await harness.runToolAfter(
-      { tool: "Edit", sessionID: "s-1", callID: "1", args: { file_path: path.join(tempRoot, "src", "feature", "SampleController.kt") } },
+      { tool: "edit", sessionID: "s-1", callID: "1", args: { filePath: path.join(tempRoot, "src", "feature", "SampleController.kt") } },
       inScope
     )
     expect(inScope.output).not.toContain("[intent-gate]")
 
     const outOfScope = { title: "Edit", output: "ok", metadata: {} }
     await harness.runToolAfter(
-      { tool: "Edit", sessionID: "s-1", callID: "2", args: { file_path: path.join(tempRoot, "src", "feature", "OutOfScope.kt") } },
+      { tool: "edit", sessionID: "s-1", callID: "2", args: { filePath: path.join(tempRoot, "src", "feature", "OutOfScope.kt") } },
       outOfScope
     )
     expect(outOfScope.output).toContain("[intent-gate] ⚠ SCOPE WARNING")
@@ -822,8 +1469,8 @@ describe("context injection plugins", () => {
 
     await expect(
       harness.runToolBefore(
-        { tool: "Read", sessionID: "s-1", callID: "1" },
-        { args: { file_path: path.join(tempRoot, ".env.test") } }
+        { tool: "read", sessionID: "s-1", callID: "1" },
+        { args: { filePath: path.join(tempRoot, ".env.test") } }
       )
     ).rejects.toThrow("[env-protection] Blocked access to sensitive file")
   })
@@ -832,7 +1479,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-1", callID: "1" },
+      { tool: "task", sessionID: "parent-1", callID: "1" },
       {
         args: {
           prompt:
@@ -890,7 +1537,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-behavioral", callID: "1" },
+      { tool: "task", sessionID: "parent-behavioral", callID: "1" },
       {
         args: {
           prompt:
@@ -936,7 +1583,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-stage", callID: "1" },
+      { tool: "task", sessionID: "parent-stage", callID: "1" },
       {
         args: {
           prompt:
@@ -994,7 +1641,7 @@ describe("context injection plugins", () => {
     )
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-contract", callID: "1" },
+      { tool: "task", sessionID: "parent-contract", callID: "1" },
       {
         args: {
           prompt: "Execute task 99 for docs/specs/wrong-feature/plan.md\nAttempt: 1\nThis text should lose to the explicit contract.",
@@ -1036,7 +1683,7 @@ describe("context injection plugins", () => {
     mkdirSync(path.join(repoA, ".git"), { recursive: true })
     mkdirSync(path.join(repoA, "docs", "specs", "feature-x"), { recursive: true })
     mkdirSync(path.join(repoB, ".git"), { recursive: true })
-    mkdirSync(path.join(repoB, "docs", "specs", "feature-x", "state", "tasks", "task-2"), { recursive: true })
+    mkdirSync(path.join(repoB, "docs", "specs", "feature-x"), { recursive: true })
     writeFileSync(path.join(repoA, "docs", "specs", "feature-x", "plan.md"), markdownPlanTask({ action: "Plan repo A task.", done: "Repo A task is planned." }), "utf-8")
     writeFileSync(path.join(repoB, "docs", "specs", "feature-x", "plan.md"), markdownPlanTask({ id: "2", action: "Plan repo B task.", done: "Repo B task is planned." }), "utf-8")
     writeFileSync(
@@ -1066,7 +1713,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-multi-target", callID: "1" },
+      { tool: "task", sessionID: "parent-multi-target", callID: "1" },
       {
         args: {
           prompt:
@@ -1086,7 +1733,10 @@ describe("context injection plugins", () => {
       },
     })
 
-    const taskRuntimePath = path.join(repoB, "docs", "specs", "feature-x", "state", "tasks", "task-2", "runtime.json")
+    // Feature state is centralized under the WORKSPACE root (not the target
+    // repo) since the spec-state centralization refactor; the runtime record
+    // still binds the resolved write target via targetRepoRoot.
+    const taskRuntimePath = path.join(tempRoot, "docs", "specs", "feature-x", "state", "tasks", "task-2", "runtime.json")
     const taskRuntime = JSON.parse(readFileSync(taskRuntimePath, "utf-8")) as {
       targetRepoRoot: string
       planPath: string
@@ -1104,7 +1754,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-compat", callID: "1" },
+      { tool: "task", sessionID: "parent-compat", callID: "1" },
       {
         args: {
           prompt: "Validate task 4 for docs/specs/feature-x/plan.md\nAttempt: 2\nStage: validate",
@@ -1175,7 +1825,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"], { client: mockClient })
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-stale", callID: "1" },
+      { tool: "task", sessionID: "parent-stale", callID: "1" },
       {
         args: {
           prompt: "Validate task 6 for docs/specs/feature-x/plan.md\nAttempt: 1\nStage: validate",
@@ -1326,7 +1976,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"], { client: mockClient, directory: projectRoot })
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-disabled", callID: "1" },
+      { tool: "task", sessionID: "parent-disabled", callID: "1" },
       {
         args: {
           prompt: `Execute task 5 for docs/specs/feature-x/plan.md\nTarget Repo Root: ${projectRoot}`,
@@ -1370,7 +2020,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"], { client: mockClient })
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-implement", callID: "1" },
+      { tool: "task", sessionID: "parent-implement", callID: "1" },
       {
         args: {
           prompt: "Execute task 5 for feature feature-x.\nvalidatorWorkPath: /tmp/docs/specs/feature-x/state/tasks/task-5/validator-work.md",
@@ -1438,7 +2088,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"], { client: mockClient })
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-abort-fails", callID: "1" },
+      { tool: "task", sessionID: "parent-abort-fails", callID: "1" },
       { args: { prompt: "Execute task 9 for docs/specs/feature-x/plan.md" } }
     )
     await harness.runEvent({
@@ -1499,7 +2149,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.task-runtime.ts"], { client: mockClient })
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-budget", callID: "1" },
+      { tool: "task", sessionID: "parent-budget", callID: "1" },
       {
         args: {
           prompt: "Execute task 8 for docs/specs/feature-x/plan.md\nAttempt: 1",
@@ -1591,7 +2241,7 @@ describe("context injection plugins", () => {
     const harness = await createHarness(["j.carl-inject.ts"])
 
     await harness.runToolBefore(
-      { tool: "Task", sessionID: "parent-carl-contract", callID: "1" },
+      { tool: "task", sessionID: "parent-carl-contract", callID: "1" },
       {
         args: {
           subagent_type: "j.implementer",
