@@ -13,7 +13,7 @@ if (!dottedPath || rawValue === undefined) {
   )
 }
 
-const WORKFLOW_SECTIONS = new Set(["automation", "implement", "unify", "documentation"])
+const WORKFLOW_SECTIONS = new Set(["automation", "implement", "unify", "documentation", "telemetry"])
 
 const inputParts = dottedPath.split(".")
 const parts =

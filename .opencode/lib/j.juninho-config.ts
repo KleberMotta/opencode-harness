@@ -15,6 +15,9 @@ export type JuninhoConfig = {
       nonInteractive?: boolean
       autoApproveArtifacts?: boolean
       idleNotifications?: boolean
+      idleNotificationsOnlyWhenBackground?: boolean
+      idleNotificationsSilent?: boolean
+      idleNotificationSound?: string
     }
     implement?: {
       preCommitScope?: string
@@ -60,6 +63,9 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       nonInteractive: false,
       autoApproveArtifacts: false,
       idleNotifications: true,
+      idleNotificationsOnlyWhenBackground: true,
+      idleNotificationsSilent: false,
+      idleNotificationSound: "Glass",
     },
     implement: {
       preCommitScope: "related",

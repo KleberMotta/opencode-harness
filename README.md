@@ -441,6 +441,9 @@ Fonte da verdade: `DEFAULT_CONFIG` em `.opencode/lib/j.juninho-config.ts`. O arq
 | `nonInteractive` | `false` | = | Em `true`, agentes não perguntam — assumem decisões padrão |
 | `autoApproveArtifacts` | `false` | = | Em `true`, planner/spec-writer não pedem aprovação antes de escrever |
 | `idleNotifications` | `true` | = (ausente) | Notificação local em sessão parada (`j.notify`) |
+| `idleNotificationsOnlyWhenBackground` | `true` | = (ausente) | No macOS, notifica somente se o terminal do OpenCode não estiver em foco |
+| `idleNotificationsSilent` | `false` | `true` | Em `true`, envia a notificação sem som; tem prioridade sobre `idleNotificationSound` |
+| `idleNotificationSound` | `"Glass"` | `"Glass"` | Som nativo do macOS quando a notificação não é silenciosa, por exemplo `"Glass"` ou `"Ping"` |
 
 **`workflow.implement`**
 

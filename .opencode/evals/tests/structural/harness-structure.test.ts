@@ -336,6 +336,23 @@ describe("harness structural contracts", () => {
     expect(reviewer).toContain("Integration validation reuses scripts deliberately")
   })
 
+  test("idle notifications support foreground suppression", () => {
+    const root = repoRoot()
+    const notifyPlugin = readFileSync(path.join(root, ".opencode/plugins/j.notify.ts"), "utf-8")
+    const config = readFileSync(path.join(root, ".opencode/lib/j.juninho-config.ts"), "utf-8")
+    const validator = readFileSync(path.join(root, ".opencode/cli/config-validate.ts"), "utf-8")
+
+    expect(notifyPlugin).toContain("hostTerminalIsFrontmost")
+    expect(notifyPlugin).toContain("idleNotificationsOnlyWhenBackground")
+    expect(notifyPlugin).toContain("idleNotificationsSilent")
+    expect(notifyPlugin).toContain("idleNotificationSound")
+    expect(config).toContain("idleNotificationsOnlyWhenBackground: true")
+    expect(config).toContain('idleNotificationSound: "Glass"')
+    expect(validator).toContain('"idleNotificationsOnlyWhenBackground"')
+    expect(validator).toContain('"idleNotificationsSilent"')
+    expect(validator).toContain('"idleNotificationSound"')
+  })
+
   test("runtime validation scripts require discovery and developer choice", () => {
     const root = repoRoot()
     const planner = readFileSync(path.join(root, ".opencode/agents/j.planner.md"), "utf-8")
