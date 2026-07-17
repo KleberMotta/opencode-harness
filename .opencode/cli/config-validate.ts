@@ -22,6 +22,9 @@ const ALLOWED_AUTOMATION = new Set([
   "nonInteractive",
   "autoApproveArtifacts",
   "idleNotifications",
+  "idleNotificationsOnlyWhenBackground",
+  "idleNotificationsSilent",
+  "idleNotificationSound",
 ])
 
 const ALLOWED_IMPLEMENT = new Set([

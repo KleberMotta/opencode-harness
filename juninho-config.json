@@ -7,7 +7,11 @@
   "workflow": {
     "automation": {
       "nonInteractive": false,
-      "autoApproveArtifacts": false
+      "autoApproveArtifacts": false,
+      "idleNotifications": true,
+      "idleNotificationsOnlyWhenBackground": true,
+      "idleNotificationsSilent": true,
+      "idleNotificationSound": "Glass"
     },
     "implement": {
       "preCommitScope": "related",

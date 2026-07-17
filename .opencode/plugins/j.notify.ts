@@ -5,6 +5,14 @@ import { loadJuninhoConfig } from "../lib/j.juninho-config"
 
 const TITLE = "opencode"
 const CHILD_SESSIONS_MAX = 4096
+const TERMINAL_APPS: Record<string, string> = {
+  Apple_Terminal: "Terminal",
+  "iTerm.app": "iTerm2",
+  vscode: "Code",
+  WarpTerminal: "Warp",
+  WezTerm: "WezTerm",
+  ghostty: "Ghostty",
+}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined
@@ -14,11 +22,36 @@ function escapeAppleScript(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\"/g, '\\\"')
 }
 
-function sendNotification(message: string): void {
+function hostTerminalIsFrontmost(): boolean | undefined {
+  if (platform() !== "darwin") return undefined
+  const termProgram = process.env.TERM_PROGRAM
+  const terminalApp = termProgram ? TERMINAL_APPS[termProgram] : undefined
+  if (!terminalApp) return undefined
+
+  try {
+    const activeApp = execFileSync(
+      "osascript",
+      ["-e", 'tell application "System Events" to get name of first application process whose frontmost is true'],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
+    ).trim()
+    return activeApp === terminalApp
+  } catch {
+    // If macOS accessibility automation is unavailable, preserve notifications.
+    return undefined
+  }
+}
+
+function sendNotification(message: string, sound?: string): void {
   try {
     const os = platform()
     if (os === "darwin") {
-      const script = 'display notification "' + escapeAppleScript(message) + '" with title "' + TITLE + '" sound name "Glass"'
+      const script =
+        'display notification "' +
+        escapeAppleScript(message) +
+        '" with title "' +
+        TITLE +
+        '"' +
+        (sound ? ' sound name "' + escapeAppleScript(sound) + '"' : "")
       execFileSync("osascript", ["-e", script], {
         stdio: "ignore",
         timeout: 5000,
@@ -61,8 +94,13 @@ export default (async ({ directory }: { directory: string }) => {
       const sessionID = str(properties.sessionID)
       if (sessionID && childSessions.has(sessionID)) return
       // Gate re-read per event so the toggle applies without a session restart.
-      if (loadJuninhoConfig(directory).workflow?.automation?.idleNotifications === false) return
-      sendNotification("idle session detected")
+      const automation = loadJuninhoConfig(directory).workflow?.automation
+      if (automation?.idleNotifications === false) return
+      if (automation?.idleNotificationsOnlyWhenBackground !== false && hostTerminalIsFrontmost()) return
+      sendNotification(
+        "idle session detected",
+        automation?.idleNotificationsSilent ? undefined : automation?.idleNotificationSound,
+      )
     },
   }
 }) satisfies Plugin
