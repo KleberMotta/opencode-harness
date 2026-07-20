@@ -32,6 +32,11 @@ export type JuninhoConfig = {
       refreshExecutionHeartbeat?: boolean
       singleTaskMode?: boolean
     }
+    review?: {
+      plan?: boolean
+      implement?: boolean
+      maxAttempts?: number
+    }
     telemetry?: {
       enabled?: boolean
     }
@@ -79,6 +84,11 @@ const DEFAULT_CONFIG: JuninhoConfig = {
       watchdogSessionStale: true,
       refreshExecutionHeartbeat: false,
       singleTaskMode: false,
+    },
+    review: {
+      plan: true,
+      implement: true,
+      maxAttempts: 2,
     },
     unify: {
       enabled: true,
@@ -149,6 +159,10 @@ export function loadJuninhoConfig(directory: string): JuninhoConfig {
             ...DEFAULT_CONFIG.workflow?.implement,
             ...parsed.workflow?.implement,
           },
+          review: {
+            ...DEFAULT_CONFIG.workflow?.review,
+            ...parsed.workflow?.review,
+          },
           unify: {
             ...DEFAULT_CONFIG.workflow?.unify,
             ...parsed.workflow?.unify,
@@ -181,6 +195,10 @@ export function loadJuninhoConfig(directory: string): JuninhoConfig {
           implement: {
             ...DEFAULT_CONFIG.workflow?.implement,
             ...parsed.workflow?.implement,
+          },
+          review: {
+            ...DEFAULT_CONFIG.workflow?.review,
+            ...parsed.workflow?.review,
           },
           unify: {
             ...DEFAULT_CONFIG.workflow?.unify,

@@ -20,6 +20,22 @@ export function argFilePath(args: unknown): string {
   return ""
 }
 
+export function argFilePaths(args: unknown): string[] {
+  const record = (args ?? {}) as Record<string, unknown>
+  const direct = argFilePath(record)
+  const patchText = typeof record.patchText === "string"
+    ? record.patchText
+    : typeof record.patch_text === "string"
+      ? record.patch_text
+      : ""
+  const patchPaths = Array.from(
+    patchText.matchAll(/^\*\*\* (?:Add|Update|Delete) File:\s*(.+?)\s*$/gm),
+    (match) => match[1]
+  )
+  for (const match of patchText.matchAll(/^\*\*\* Move to:\s*(.+?)\s*$/gm)) patchPaths.push(match[1])
+  return Array.from(new Set([...(direct ? [direct] : []), ...patchPaths]))
+}
+
 export function argOldString(args: unknown): string {
   const record = (args ?? {}) as Record<string, unknown>
   for (const key of ["oldString", "old_string"]) {

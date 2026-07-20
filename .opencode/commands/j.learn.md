@@ -38,7 +38,7 @@ The orchestrator MUST execute these phases in order. This command is **synchrono
 
 ### Phase 1 — Weakness signature
 
-1. Classify the failure by its **root mechanism**, not its symptom. "Agent wrote a mutable DTO" is a symptom; the mechanism might be "skill j.dto-writing never states immutability as a hard rule" or "no lint rule catches `var` in data classes".
+1. Classify the failure by its **root mechanism**, not its symptom. "Agent wrote a mutable DTO" is a symptom; the mechanism might be "skill j.spring-web-dto-writing never states immutability as a hard rule" or "no lint rule catches `var` in data classes".
 2. Collect the concrete evidence and record it verbatim (file path + excerpt, PR diff hunk, check-review section, session trace snippet). Evidence is mandatory (Constraint 1).
 3. Write the weakness signature: one sentence naming the mechanism, plus the evidence pointers.
 
@@ -49,12 +49,12 @@ The orchestrator MUST execute these phases in order. This command is **synchrono
    - `.opencode/commands/*.md` — command specs
    - `.opencode/plugins/*.ts` — runtime policy/enforcement
    - `.opencode/scripts/*.sh` — shell gates (lint/build/test)
-   - skills — workspace (`.opencode/skills/`) or context layer (`{context}/agent-context/skills/`)
+    - skills — workspace (`.opencode/skills/`), inherited `.context/skills/`, or repository-local `.opencode/skills/`
    - `skill-map.json` — workspace or context layer
-   - `{context}/agent-context/AGENTS.md` — context-scoped agent knowledge
-   - `{context}/agent-context/lint-rules/` — context-scoped detekt/lint rules
+    - `.context/AGENTS.md` — shared context knowledge
+    - `.context/lint-rules/` — shared detekt/lint rules
 5. Pick **exactly one** surface using these rules, in priority order:
-   - If the failure is **mechanically detectable in code** → prefer a detekt/lint rule in the context layer (`{context}/agent-context/lint-rules/`) over prose. A rule fires every time; prose is advisory.
+    - If the failure is **mechanically detectable in code** → prefer a rule in the nearest applicable `.context/lint-rules/` over prose.
    - If the failure is **agent behavior at runtime** (tool misuse, skipped step, forbidden action) → a plugin/policy (`.opencode/plugins/*.ts`).
    - Otherwise (knowledge/convention gaps) → a skill or the context `AGENTS.md`.
 6. If `--surface` was given, validate the pin against these rules. If the pin contradicts them (e.g. pinning prose for a lintable failure), tell the user why and ask before continuing.

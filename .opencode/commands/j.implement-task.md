@@ -40,7 +40,7 @@ Invoke the `@j.implementer` agent to execute exactly one task from an active pla
     - `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/sessions/{sessionID}-runtime.json`
     - `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/implementer-work.md`
     - `$WORKSPACE_ROOT/docs/specs/{feature-slug}/state/integration-state.json`
-12. The task creates exactly one implementation commit directly on the canonical branch `feature/{feature-slug}` in the resolved target repo.
+12. The task creates exactly one implementation commit directly on the canonical branch `feature/{feature-slug}` in the resolved target repo. In `singleTaskMode`, direct developer feedback about the latest completed task also routes back to this task and amends that same commit; it does not create a task or edit `plan.md`. Only `/j.check`/checker-driven corrections, or corrections after later task work starts, use forward-only follow-up routing.
 13. The command must not create a second/final commit for state artifacts. Leave feature state changes for `/j.unify`, gated by `workflow.unify.commitFeatureArtifacts`.
 14. The command exits after the requested target task is COMPLETE, FAILED, or BLOCKED. It must not continue into sibling tasks, later waves, or other write targets.
 
@@ -96,5 +96,5 @@ When ANY sub-agent returns output:
 
 ## After task implementation
 
-Use `/j.implement-task <project>:<feature-slug>/task<next-id>` for the next focused task when the active plan has multiple write targets.
+Use `/j.implement-task <project>:<feature-slug>/task<next-id>` only when the developer asks to proceed. Direct feedback about the completed task must reuse that task, not advance to the next id or invoke planning.
 Run `/j.check` only when the intended task set or whole feature is ready for repo-wide verification.

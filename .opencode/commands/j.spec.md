@@ -15,8 +15,8 @@ Invoke the `@j.spec-writer` agent to create a detailed spec before implementatio
 /j.spec user profile with avatar upload
 /j.spec appointment booking flow
 /j.spec payment integration with Stripe
-/j.spec --from olxbr/agent-context/knowledge/drafts/antecipacao-de-recebiveis.md
-/j.spec --from @olxbr/agent-context/knowledge/drafts/seller-payout-batching.md payout batching v1
+/j.spec --from contexts/trp/.context/knowledge/drafts/antecipacao-de-recebiveis.md
+/j.spec --from @contexts/trp/.context/knowledge/drafts/seller-payout-batching.md payout batching v1
 ```
 
 ## What happens
@@ -37,7 +37,7 @@ The session does NOT need to call `@j.explore` separately — `@j.spec-writer` h
 
 ## Starting from a knowledge draft (`--from`)
 
-When `--from` points to an OKF knowledge document (typically `{context}/agent-context/knowledge/drafts/{doc}.md`):
+When `--from` points to an OKF knowledge document (typically `.context/knowledge/drafts/{doc}.md`):
 
 1. `@j.spec-writer` READS the draft first — including its OKF frontmatter (`type`/`status`/`tags`) — before the interview
 2. Trade-offs, alternatives, and decisions already discussed in the draft are treated as **interview answers** — the interview only covers what the draft leaves open (fewer questions)

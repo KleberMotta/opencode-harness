@@ -48,7 +48,13 @@ export function featureStateTaskPaths(directory: string, featureSlug: string, ta
     runtimePath: path.join(taskDir, "runtime.json"),
     validatorPath: path.join(taskDir, "validator-work.md"),
     contractPath: path.join(taskDir, "task-contract.json"),
+    canonReviewPath: path.join(taskDir, "canon-review.json"),
+    canonCoveragePath: path.join(taskDir, "canon-coverage.json"),
   }
+}
+
+export function planReviewPath(directory: string, featureSlug: string, hints?: FeaturePathHints): string {
+  return path.join(featureStateDir(directory, featureSlug, hints), "plan-review.json")
 }
 
 export function featureStateSessionRuntimePath(directory: string, featureSlug: string, sessionID: string, hints?: FeaturePathHints): string {

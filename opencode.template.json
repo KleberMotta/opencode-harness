@@ -179,5 +179,6 @@
       "*.env.*": "allow",
       "*.env.example": "allow"
     }
-  }
+  },
+  "subagent_depth": 5
 }

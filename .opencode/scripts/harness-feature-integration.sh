@@ -382,7 +382,9 @@ const fs = require("fs")
 const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"))
 
 manifest.tasks = manifest.tasks || {}
+const existing = manifest.tasks[process.env.TASK_ID] || {}
 manifest.tasks[process.env.TASK_ID] = {
+  ...existing,
   taskID: process.env.TASK_ID,
   validatedCommit: process.env.VALIDATED_COMMIT,
   attempt: Number(process.env.TASK_ATTEMPT),

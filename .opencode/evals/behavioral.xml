@@ -139,4 +139,18 @@
     <max_duration_ms>90000</max_duration_ms>
     <answer>mapper-guidance=used</answer>
   </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with subagent `j.canon-reviewer` to review Task 1's candidate commit (COMMIT mode). Answer exactly `canon-review-required-default=fail` only if the reviewer writes `canon-review.json` with verdict FAIL because the new default on required `AccountOutput.preferences` diverges from the candidate-parent explicit-constructor pattern and masks an unchanged caller — a divergence the plan does not authorize.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>canon-review-required-default=fail</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Use the Task tool with subagent `j.canon-reviewer` to review Task 1's candidate commit (COMMIT mode). Answer exactly `canon-review-optional-default=pass` only if the reviewer writes `canon-review.json` with verdict PASS because nullable `AccountOutput.note = null` is explicitly optional and does not weaken a required constructor contract.</question>
+    <preferred_tool>task</preferred_tool>
+    <max_tool_calls>3</max_tool_calls>
+    <max_duration_ms>90000</max_duration_ms>
+    <answer>canon-review-optional-default=pass</answer>
+  </qa_pair>
 </evaluation>

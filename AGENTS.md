@@ -71,6 +71,9 @@ Repo-wide checks happen after implementer exits.
 Reads spec and full `CONTEXT.md` BEFORE code. BLOCK / FIX / NOTE / APPROVED.
 Can fix FIX-tier issues directly. Writes per-task audit trail to `docs/specs/{slug}/state/tasks/task-{id}/validator-work.md`.
 
+### @j.auto-improver
+Optional post-commit canon gate enabled by `workflow.implement.autoImprove`. Audits the exact task diff against project and context patterns, commits evidence-backed canon updates in `contexts`, leaves harness edits uncommitted, and returns an amend-only correction contract to the same task implementer.
+
 ### @j.reviewer
 Detailed read-only reviewer. Used via `/j.pr-review` and by `/j.check` to generate actionable follow-up findings.
 
@@ -104,10 +107,10 @@ Fetches official API docs via Context7 MCP.
 
 ## Context Layers
 
-- First-level workspace folders (e.g. `olxbr/`) are **contexts** — groups of related repos sharing conventions and knowledge.
-- Context assets live in `{context}/agent-context/`: `AGENTS.md`, `skills/`, `skill-map.json`, `lint-rules/`, `references.json`, and `knowledge/` (OKF documents with `type`/`status`/`tags` frontmatter).
-- Precedence: **project > context > workspace** — the most specific layer wins when rules conflict.
-- Context lint rules (`{context}/agent-context/lint-rules/rules.jar`) are picked up automatically by `lint-structure.sh` for repos in that context — prose conventions get mechanized into blocking detekt rules. Mature context skills carry three layers: `SKILL.md` (process), `SYSTEM.md` (canonical output spec — wins over SKILL.md on conflict), and `GOTCHAS.md` (failure memory that feeds new lint rules).
+- Any grouping directory under `contexts/` may define canon through a `.context/` child; product repositories live as siblings of that marker.
+- A repository inherits the nearest `.context` and every ancestor `.context` outward. Precedence is **repository evidence/local patterns > nearest context > ancestor contexts > workspace**.
+- Repository evidence includes README, AGENTS, CLAUDE/AI rules, build/command manifests, and repeated sibling code patterns. Slight isolated divergence follows canon; strong/repeated divergence requires clarification and then repository-local skill/AGENTS guidance.
+- Context lint rules (`.context/lint-rules/rules.jar`) are picked up automatically by `lint-structure.sh` from the nearest containing context. Mature context skills carry three layers: `SKILL.md`, `SYSTEM.md`, and `GOTCHAS.md`.
 - Knowledge status rule: documents under `knowledge/domains/` and `knowledge/decisions/` (`status: consolidated`) are **implemented truth**; documents under `knowledge/drafts/` (`status: draft`) are **intent** — never cite a draft as current system behavior.
 
 ## Outer Loop
@@ -127,6 +130,8 @@ Termination is governed by these sensors, never by model confidence.
 | `j.auto-format` | Write/Edit | Auto-format after file changes |
 | `j.plan-autoload` | chat.message + Read + compaction | Inject active plan (task section only for task-scoped sessions) plus the `SKILL.md` of every skill the task declares on its `- **Skills**:` line |
 | `j.task-runtime` | Task spawn + session created | Persist task/session runtime metadata |
+| `j.auto-improve` | Task completion | Schedules task-local canon audit when `workflow.implement.autoImprove` is enabled |
+| `j.auto-improve-guard` | Write/Edit | Prevents the auto improver from editing product code directly |
 | `j.task-board` | Tool after + compaction | Append per-task board from feature state |
 | `j.notify` | Session idle | Non-blocking local notification on stalls/idleness |
 | `j.carl-inject` | Read + compaction | Inject principles + domain docs from file/task context |
@@ -157,7 +162,7 @@ Shared helpers live in `.opencode/lib/` and are imported by the plugins above �
 
 ## Skills (injected automatically by file pattern)
 
-Workspace layer — `.opencode/skill-map.json`. Each context adds its own layer (`{context}/agent-context/skill-map.json`, e.g. the 17 measured Kotlin skills under `olxbr/`), and project > context > workspace decides who wins. `bun run skills:list` prints every layer.
+Workspace layer — `.opencode/skill-map.json`. Every inherited `.context/skill-map.json` adds a layer, nearest first for precedence. `bun run skills:list` prints every discovered layer.
 
 | Skill | Activates on | Notes |
 |-------|-------------|-------|
@@ -186,6 +191,10 @@ Workspace layer — `.opencode/skill-map.json`. Each context adds its own layer 
 | `docs/specs/{slug}/state/tasks/task-{id}/validator-work.md` | workspace | Per-task validator audit trail |
 | `docs/specs/{slug}/state/tasks/task-{id}/retry-state.json` | workspace | Retry budget and retry bookkeeping |
 | `docs/specs/{slug}/state/tasks/task-{id}/runtime.json` | workspace | Runtime metadata for watchdog/orchestration |
+| `docs/specs/{slug}/state/tasks/task-{id}/auto-improve-state.json` | workspace | Post-commit canon audit phase, fingerprint, context commits and restart flag |
+| `docs/specs/{slug}/state/tasks/task-{id}/auto-improve-work.md` | workspace | Append-only auto-improve audit evidence |
+| `docs/specs/{slug}/state/tasks/task-{id}/auto-improve-correction.md` | workspace | Exact same-task amend contract when the audit reopens implementation |
+| `docs/specs/{slug}/state/tasks/task-{id}/auto-improve-coverage.json` | workspace | Generated pre-write and post-commit per-file canon coverage checklist |
 | `docs/specs/{slug}/state/sessions/{sessionID}-runtime.json` | workspace | Session runtime ownership metadata |
 | `docs/specs/{slug}/state/integration-state.json` | workspace | Canonical feature integration manifest |
 | `docs/domain/{domain}/*.md` | target repos | Business domain docs (stays per-repo) |
@@ -211,18 +220,20 @@ Any time the developer:
    - Missing or unclear `CONTEXT.md` constraint?
    - Missing canonical example in `find_pattern`?
 
-2. **Propose**: Present a concise proposal to the developer:
-   - **Where**: exact file(s) that should be updated (e.g., `.opencode/skills/j.service-writing/SKILL.md`, `src/AGENTS.md`, `docs/principles/naming.md`)
+2. **Route**:
+   - When `workflow.implement.autoImprove` is enabled during a task, `@j.auto-improver` applies evidence-backed context-canon changes automatically and commits them in `contexts`; it leaves harness changes uncommitted and reports both in the main session.
+   - Outside that optional task gate, present a concise proposal to the developer:
+    - **Where**: exact file(s) that should be updated (e.g., `contexts/trp/.context/skills/j.spring-domain-service-writing/SKILL.md`, a repository-local `AGENTS.md`, or `docs/principles/naming.md`)
    - **What**: the specific rule/pattern/example to add
    - **Why**: how this prevents the same class of error from recurring
 
-3. **Ask**: "Deseja que eu atualize [file] com essa regra para que o erro não se repita?" (or equivalent in the conversation language)
+3. **Ask**: Outside autoImprove, ask "Deseja que eu atualize [file] com essa regra para que o erro não se repita?" (or equivalent in the conversation language).
 
 4. **Act or skip**: If the developer approves, apply the update. If rejected, move on without insisting.
 
 ### Constraints
 
-- Never update harness/skills/docs without developer approval.
+- Never commit harness changes automatically. AutoImprove may commit only evidence-backed context-canon changes in `contexts`; it reports uncommitted harness changes and restart requirements to the developer.
 - Keep proposals atomic — one concern per proposal. If multiple gaps were found, list them separately.
 - Do not propose changes to `plan.md`, `spec.md`, or `CONTEXT.md` of the current feature — those are immutable during implementation.
 - Proposals must be concrete (exact file + exact content), not vague suggestions.
@@ -237,6 +248,7 @@ Any time the developer:
 - Sync markers: `<!-- juninho:sync source=... hash=... -->` to track doc↔code alignment
 - Implementation history: exactly one implementation commit per task on `feature/{slug}`; optional `/j.unify` commits are limited to one doc-sync commit gated by `workflow.unify.commitDocUpdates` and one feature-state artifact commit gated by `workflow.unify.commitFeatureArtifacts`.
 - Hierarchical `AGENTS.md`: root + `src/` + `src/{module}/` — generated by `/j.finish-setup`
+- Canon contexts: hierarchical `.context/` directories for shared rules; repository-specific peculiarities belong in repository-local skills, AGENTS, CLAUDE/rules or principle docs after clarification.
 - Scratch / temp data: ALWAYS use `/Users/kleber.motta/repos/tmp/` (set `TMPDIR=/Users/kleber.motta/repos/tmp`) for sandboxes, eval runs, scratch files, and any throwaway output. NEVER use `/var/folders/...`, `/tmp`, or `os.tmpdir()` defaults — those paths are outside the workspace permission scope and will fail to read back. Example: `TMPDIR=/Users/kleber.motta/repos/tmp bun ./.opencode/evals/lib/opencode-behavioral-runner.ts`.
 
 ## Git Commit Rules

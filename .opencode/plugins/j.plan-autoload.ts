@@ -17,7 +17,16 @@ import { toolIs } from "../lib/j.tool-compat"
 // and the only real mechanism is j.skill-inject's file-pattern match, which
 // fires late (after a Read) and never for a file the task creates from scratch.
 
-type PlanRoutingHint = { prompt?: string; targetRepoRoot?: string; planPath?: string; specPath?: string; contextPath?: string; taskContractPath?: string; taskID?: string }
+type PlanRoutingHint = {
+  prompt?: string
+  targetRepoRoot?: string
+  planPath?: string
+  specPath?: string
+  contextPath?: string
+  taskContractPath?: string
+  taskID?: string
+  contractBound?: boolean
+}
 
 type ActivePlan = {
   planPath: string
@@ -303,17 +312,16 @@ export default (async ({ directory }: { directory: string }) => {
       const queue = pendingHintsByParent.get(parentID)
       if (!queue || queue.length === 0) return
 
-      // The queue can desync from session creation (a task call may fail after
-      // the before-hook, or resume an existing session, without ever emitting
-      // session.created). The child session title carries the task prompt, so
-      // it is authoritative for taskID: match the queued hint by it when
-      // possible, and never trust a queued taskID the title does not confirm.
+      // Structured task contracts are authoritative even when the UI rewrites
+      // the child title. Prompt-only hints still require a task-shaped title so
+      // an unrelated subagent cannot accidentally inherit task scope.
       const title = typeof info?.title === "string" ? info.title : ""
-      const titleTaskID = title.match(/execute task ([A-Za-z0-9_-]+)/i)?.[1]
+      const titleTaskID = title.match(/(?:execute|audit) task ([A-Za-z0-9_-]+)/i)?.[1]
       const matchedIndex = titleTaskID ? queue.findIndex((candidate) => candidate.taskID === titleTaskID) : -1
       const hint = matchedIndex >= 0 ? queue.splice(matchedIndex, 1)[0] : queue.shift()
       if (!hint) return
-      captureRoutingHint(sessionID, { ...hint, taskID: titleTaskID })
+      const resolvedTaskID = titleTaskID ?? (hint.contractBound ? hint.taskID : undefined)
+      captureRoutingHint(sessionID, { ...hint, taskID: resolvedTaskID })
       if (queue.length > 0) pendingHintsByParent.set(parentID, queue)
       else pendingHintsByParent.delete(parentID)
     },
@@ -373,6 +381,7 @@ export default (async ({ directory }: { directory: string }) => {
         specPath: typeof contractArg?.specPath === "string" ? contractArg.specPath : undefined,
         contextPath: typeof contractArg?.contextPath === "string" ? contractArg.contextPath : undefined,
         taskContractPath: typeof contractArg?.taskContractPath === "string" ? contractArg.taskContractPath : undefined,
+        contractBound: Boolean(contractArg),
       }
       // The parent (workflow owner) keeps only path hints; taskID is a
       // child-session property, otherwise the owner itself would render as

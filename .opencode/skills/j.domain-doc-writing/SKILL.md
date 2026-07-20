@@ -12,7 +12,7 @@ Creating or editing any file under `docs/domain/`, including `docs/domain/INDEX.
 
 1. **Write the doc against the code, not against memory.** Open the services, entities, and controllers that own the flow and describe what they do now. `docs/domain/*` answers *what the business does*; `AGENTS.md` answers *how to work in this directory*; `docs/principles/*` answers *which technical pattern applies across modules*.
 
-2. **Use the section set from the canon.** `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/domain/cashout.md`: `Resumo do dominio` → `Fontes de verdade` (the code paths that justify the doc) → `Entradas e saidas` (per entrypoint: endpoint, headers, payload, failures, result) → then the domain's states, limits, and edge cases. Write in the language the repo's docs already use.
+2. **Use the section set from the canon.** `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/cashout.md`: `Resumo do dominio` → `Fontes de verdade` (the code paths that justify the doc) → `Entradas e saidas` (per entrypoint: endpoint, headers, payload, failures, result) → then the domain's states, limits, and edge cases. Write in the language the repo's docs already use.
 
 3. **Register the doc in `docs/domain/INDEX.md` in the exact parsed format.** `parseDomainIndex` in `/Users/kleber.motta/repos/.opencode/plugins/j.carl-inject.ts` is the only thing that turns a file on disk into an injected doc:
 
@@ -40,7 +40,7 @@ Creating or editing any file under `docs/domain/`, including `docs/domain/INDEX.
 
 ## Canonical Example
 
-The pair that makes `cashout.md` reachable. `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/domain/INDEX.md`:
+The pair that makes `cashout.md` reachable. `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/INDEX.md`:
 
 ```markdown
 ## cashout
@@ -49,7 +49,7 @@ Files:
   - cashout.md — Cashout and transfer domain
 ```
 
-And the head of `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/domain/cashout.md` it points at:
+And the head of `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/cashout.md` it points at:
 
 ```markdown
 <!-- juninho:sync source=src/main/kotlin/br/com/olx/trp/financial/domain/cashout/service/CashoutCreateService.kt hash=manual -->

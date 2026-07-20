@@ -40,3 +40,4 @@ These files are operational metadata only.
 - `integration-state.json` and `implementer-work.md` stay at the root of this feature state directory.
 - `check-review.md` stays at the root of this feature state directory and is overwritten by the latest full-check pass.
 - When `check-review.md` identifies required changes after a task is already COMPLETE, create a new follow-up task instead of reopening the completed task.
+- `tasks/task-{id}/canon-review.json` records the independent canon reviewer's verdict (PASS/FAIL) for that task's commit; it is written by `@j.canon-reviewer`, never by the task worker.

@@ -145,7 +145,7 @@ export default (async ({ directory }: { directory: string }) => ({
     output.context.push(
       `[todo-enforcer] ${incomplete.length} incomplete task(s) remaining:\n\n` +
         incomplete.join("\n") +
-        `\n\nDo not stop until all tasks are complete. Continue working.`
+        `\n\nDo not stop until all tasks are complete. Continue working. In singleTaskMode, direct developer feedback about the latest completed task takes precedence over this pending-task reminder; correct and amend that task before advancing.`
     )
   },
   "tool.execute.after": async (
@@ -158,6 +158,6 @@ export default (async ({ directory }: { directory: string }) => ({
     if (incomplete.length === 0) return
 
     output.output +=
-      `\n\n[todo-enforcer] ${incomplete.length} task(s) still pending. Continue working.`
+      `\n\n[todo-enforcer] ${incomplete.length} task(s) still pending. Continue working unless the developer is correcting the latest completed task in singleTaskMode; that correction must amend the same task before advancing.`
   },
 })) satisfies Plugin

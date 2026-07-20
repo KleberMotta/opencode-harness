@@ -1,19 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, readdirSync } from "fs"
 import path from "path"
-import { CONTEXT_SPECIAL_DIRS, contextAssetsDir } from "../../../lib/j.workspace-paths"
+import { discoverContextRoots } from "../../../lib/j.workspace-paths"
 import { opencodeRoot, repoRoot } from "../../lib/test-utils"
 
-// Context layer: {workspace}/<context>/agent-context/{skill-map.json,skills/}.
+// Context layer: any directory under contexts/ that contains `.context/`.
 // These are the skills that shape the code the agent writes in the target
 // repos, so they get the same mechanical contract as the workspace skills.
 // Discovery mirrors findContextRoot/contextAssetsDir (the runtime rule) instead
 // of hardcoding a context name, so a second context is covered on arrival.
 function contextAssetRoots(): string[] {
-  return readdirSync(repoRoot(), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && !CONTEXT_SPECIAL_DIRS.has(entry.name))
-    .map((entry) => contextAssetsDir(path.join(repoRoot(), entry.name)))
-    .filter((assetsRoot): assetsRoot is string => assetsRoot !== null)
+  return discoverContextRoots(repoRoot())
 }
 
 function contextSkillFiles(assetsRoot: string): string[] {
@@ -41,19 +38,29 @@ describe("harness structural contracts", () => {
       ".opencode/hooks/pre-commit",
       ".opencode/skills/skill-creator/SKILL.md",
       ".opencode/scripts/check-all.sh",
+      ".opencode/scripts/commit-context-canon.sh",
       ".opencode/agents/j.checker.md",
       ".opencode/plugins/j.plan-autoload.ts",
       ".opencode/plugins/j.memory.ts",
       ".opencode/plugins/j.skill-inject.ts",
       ".opencode/plugins/j.directory-agents-injector.ts",
       ".opencode/plugins/j.task-runtime.ts",
+      ".opencode/plugins/j.artifact-ownership.ts",
       ".opencode/skill-map.json",
       "opencode.json",
+      "contexts/trp/.context/AGENTS.md",
+      "contexts/trp/.context/skill-map.json",
     ]
 
     for (const relativePath of required) {
       expect(existsSync(path.join(root, relativePath)), `missing: ${relativePath}`).toBe(true)
     }
+  })
+
+  test("canon contexts live under the dedicated contexts repository", () => {
+    const root = repoRoot()
+    expect(existsSync(path.join(root, "contexts", "trp", ".context", "skills"))).toBe(true)
+    expect(existsSync(path.join(root, "olxbr", "agent-context"))).toBe(false)
   })
 
   test("skill map entries point to existing skill folders", () => {
@@ -284,6 +291,25 @@ describe("harness structural contracts", () => {
     }
   })
 
+  test("single-task direct developer feedback reuses the completed task before planning", () => {
+    const root = repoRoot()
+    const implementCommand = readFileSync(path.join(root, ".opencode/commands/j.implement.md"), "utf-8")
+    const implementTaskCommand = readFileSync(path.join(root, ".opencode/commands/j.implement-task.md"), "utf-8")
+    const implementer = readFileSync(path.join(root, ".opencode/agents/j.implementer.md"), "utf-8")
+
+    for (const content of [implementCommand, implementTaskCommand, implementer]) {
+      expect(content).toContain("direct developer feedback")
+      expect(content).toContain("singleTaskMode")
+      expect(content).toContain("/j.check")
+    }
+
+    expect(implementCommand).toContain("before selecting work")
+    expect(implementCommand).toContain("Do not create a new task, invoke `@j.planner`, or modify `plan.md`")
+    expect(implementer).toContain("not new planned work")
+    expect(implementer).toContain("Do not create a task, invoke `j.planner`, or modify `plan.md`")
+    expect(implementer).toContain("git commit --amend --no-edit")
+  })
+
   test("check review contract stays documented across checker, reviewer, implement, and unify", () => {
     const root = repoRoot()
     const files = [
@@ -411,7 +437,7 @@ describe("harness structural contracts", () => {
     ) as { models: { strong: string; medium: string; weak: string } }
     const opencodeConfig = JSON.parse(
       readFileSync(path.join(root, "opencode.json"), "utf-8"),
-    ) as { agent: Record<string, { model: string }> }
+    ) as { agent: Record<string, { model: string }>; subagent_depth?: number }
     const templateContent = readFileSync(path.join(root, "opencode.template.json"), "utf-8")
 
     expect(juninhoConfig.models.strong).toBeTruthy()
@@ -442,5 +468,32 @@ describe("harness structural contracts", () => {
     for (const agent of ["j.explore", "j.librarian"]) {
       expect(opencodeConfig.agent[agent]?.model).toBe(juninhoConfig.models.weak)
     }
+
+    // owner -> task worker, with spare levels for agent-internal delegation.
+    expect(opencodeConfig.subagent_depth).toBeGreaterThanOrEqual(5)
+  })
+
+  test("canon reviewer contract is independent and file-backed", () => {
+    const root = repoRoot()
+    const agentPath = path.join(root, ".opencode/agents/j.canon-reviewer.md")
+    expect(existsSync(agentPath)).toBe(true)
+    const agent = readFileSync(agentPath, "utf-8")
+    // Independence (own session, driven by the loop driver) is the anti-forge guarantee.
+    expect(agent).toContain("sessão própria")
+    expect(agent).toContain("loop driver")
+    // Verdict is file-backed for both modes.
+    expect(agent).toContain("canon-review.json")
+    expect(agent).toContain("plan-review.json")
+    // The reviewer never edits the producer's artefacts.
+    expect(agent).toContain("Nunca edite código de produto")
+    expect(agent).toContain("plan.md")
+
+    for (const command of [".opencode/commands/j.review-task.md", ".opencode/commands/j.review-plan.md"]) {
+      const content = readFileSync(path.join(root, command), "utf-8")
+      expect(content).toContain("@j.canon-reviewer")
+      expect(content).toContain("task()")
+    }
+    // NOTE: the loop-driver dispatch of /j.review-task and /j.review-plan is wired in E4;
+    // this structural check locks the E3 artefacts (agent + commands) only.
   })
 })

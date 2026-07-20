@@ -13,20 +13,20 @@ Creating or editing any `AGENTS.md` file.
 1. **Find your position in the injection stack before writing a word.**
    `/Users/kleber.motta/repos/.opencode/plugins/j.directory-agents-injector.ts` decides what the agent actually sees:
    - `findAgentsMdFiles(filePath, projectRoot)` starts at `path.dirname(filePath)` and walks up while `current !== projectRoot` — the loop is **exclusive**, so the project-root `AGENTS.md` is never injected by the plugin (its own comment: *root AGENTS.md is auto-loaded by OpenCode*).
-   - `findContextAgentsMd` resolves `{context}/agent-context/AGENTS.md` and `unshift`s it to the front.
+   - `findContextAgentsMd` resolves every inherited `.context/AGENTS.md` and injects ancestor → nearest.
    - Nothing outside the project fires at all: the handler returns early unless `filePath.startsWith(directory)`.
 
    Effective order when a file is read:
    ```
-   {context}/agent-context/AGENTS.md   → most general (unshifted first)
+   ancestor .context/AGENTS.md → nearest .context/AGENTS.md → repository AGENTS chain
    {project}/AGENTS.md                 → auto-loaded by OpenCode, not by the plugin
    {project}/src/AGENTS.md             → every ancestor dir that has an AGENTS.md
    {project}/src/.../{dir}/AGENTS.md   → the file's own directory, most specific
    ```
 
-2. **Read every AGENTS.md already on that path.** For a file in `.../domain/cashout/`, that is `olxbr/agent-context/AGENTS.md`, `trp-financial-api/AGENTS.md`, `src/AGENTS.md`, `.../financial/AGENTS.md`, `.../domain/AGENTS.md`. All of it is already in context. Your file carries **only what those do not say**.
+2. **Read every AGENTS.md already on that path.** For a file under `contexts/trp/trp-financial-api`, that includes inherited `.context/AGENTS.md`, repo root `AGENTS.md`, and nested `src/.../AGENTS.md`. Your file carries only the delta.
 
-3. **Use the section set for your level.** Measured from `/Users/kleber.motta/repos/olxbr/trp-financial-api`:
+3. **Use the section set for your level.** Measured from `/Users/kleber.motta/repos/contexts/trp/trp-financial-api`:
 
    | Level | Sections |
    |---|---|
@@ -41,13 +41,13 @@ Creating or editing any `AGENTS.md` file.
    - `AGENTS.md` — how to work in this directory: boundaries, local rules, pitfalls, what to run.
    - `docs/domain/*` — business behavior (statuses, amounts, payloads, endpoints).
    - `docs/principles/*` — cross-cutting technical patterns shared by several modules.
-   - `{context}/agent-context/skills/*` — how to write one kind of file.
+   - inherited `.context/skills/*` — shared writing canon.
 
 6. **Check the placement.** An `AGENTS.md` under `src/main/resources/` is copied byte-for-byte into `target/classes/` by the Maven build — `src/main/resources/AGENTS.md` and `target/classes/AGENTS.md` are identical files today, same for the `db/migration/` pair. Author under `src/`; never author or edit one under `target/`.
 
 ## Canonical Example
 
-`/Users/kleber.motta/repos/olxbr/trp-financial-api/src/main/resources/db/migration/AGENTS.md` — complete, delta-only, one screen:
+`/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/resources/db/migration/AGENTS.md` — complete, delta-only, one screen:
 
 ```markdown
 # Flyway Migration Guide
@@ -78,8 +78,8 @@ This directory holds production schema and data migrations for the financial dat
 Read it against the root file it stacks under: it never restates the stack, the layout, or the command table. `make lint` reappears only to say *which* check this directory trips (Spotless on SQL) — that is a delta, not an echo.
 
 Two more to read before writing your own:
-- `/Users/kleber.motta/repos/olxbr/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/domain/cashout/AGENTS.md` — `Boundaries` used correctly (`configuration/`, `provider/`, `service/`).
-- `/Users/kleber.motta/repos/olxbr/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/security/AGENTS.md` — pitfalls written as blast radius (a broken principal mapping cascades into auditing).
+- `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/domain/cashout/AGENTS.md` — `Boundaries` used correctly (`configuration/`, `provider/`, `service/`).
+- `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/security/AGENTS.md` — pitfalls written as blast radius (a broken principal mapping cascades into auditing).
 
 ## RED_LINES
 

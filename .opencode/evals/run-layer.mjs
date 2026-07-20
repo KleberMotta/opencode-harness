@@ -10,11 +10,17 @@ const layerFiles = {
     "./.opencode/evals/tests/hooks/commit-scripts.test.ts",
     "./.opencode/evals/tests/context/plugin-context.test.ts",
     "./.opencode/evals/tests/state/feature-integration.test.ts",
+    "./.opencode/evals/tests/state/canon-audit.test.ts",
+    "./.opencode/evals/tests/state/loop-review.test.ts",
   ],
   structural: ["./.opencode/evals/tests/structural/harness-structure.test.ts"],
   hooks: ["./.opencode/evals/tests/hooks/commit-scripts.test.ts"],
   context: ["./.opencode/evals/tests/context/plugin-context.test.ts"],
-  state: ["./.opencode/evals/tests/state/feature-integration.test.ts"],
+  state: [
+    "./.opencode/evals/tests/state/feature-integration.test.ts",
+    "./.opencode/evals/tests/state/canon-audit.test.ts",
+    "./.opencode/evals/tests/state/loop-review.test.ts",
+  ],
 }
 
 const files = layerFiles[layer]

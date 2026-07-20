@@ -54,7 +54,7 @@ Hard rules:
 
 - The workflow owner must execute the implementation workflow itself.
 - It must NEVER spawn another generic `j.implementer` just to continue the same whole-feature request.
-- The only allowed `j.implementer` child delegations are explicit task-worker prompts that start with `Execute task {id}`.
+- The only allowed child delegations are explicit task-worker prompts that start with `Execute task {id}`.
 - Each task must be executed by its own child `j.implementer` subagent so the task gets a fresh context window.
 - Because all task commits land on the same branch, task execution must be serialized at commit time. Do not have two task workers editing and committing simultaneously.
 - A task-scoped invocation, including `/j.implement-task`, must execute only the requested task id for the resolved target repo. Do not continue into sibling tasks or later waves.
@@ -79,7 +79,7 @@ Hard rules:
 7. For target-local review findings:
     - Treat Critical and Important findings there as mandatory follow-up.
     - Use Minor findings as opportunistic cleanup when they fit the current scope.
-    - If a finding requires code changes after an earlier task is already COMPLETE, do not reopen that task. Convert the work into a new follow-up task and record the linkage in feature state.
+    - If a `/j.check` finding requires code changes after an earlier task is already COMPLETE, do not reopen that task. Convert the work into a new follow-up task and record the linkage in feature state.
 7a. Read `docs/specs/{feature-slug}/state/check-all-output.txt` if it exists.
     - Use it to understand exactly which repo-wide verification steps failed or lacked evidence.
 8. Read `docs/specs/{feature-slug}/state/functional-validation-plan.md` if it exists.
@@ -103,7 +103,15 @@ If `spec.md` does not exist, validation falls back to the `plan.md` goal and tas
 When re-entered after a failing `/j.check`, prioritize the latest repo-wide verification failure and the latest `check-review.md` findings before introducing new scope.
 Use `check-all-output.txt` as the raw verification artifact and `check-review.md` as the qualitative prioritization layer.
 Also read `functional-validation-plan.md` first so you know which runtime or local validation scenarios the next `/j.check` pass is expected to follow.
-If the required correction targets work that belongs to a task already marked COMPLETE, create a new forward-only follow-up task instead of retrying or reopening the completed task.
+If a required `/j.check` correction targets work that belongs to a task already marked COMPLETE, create a new forward-only follow-up task instead of retrying or reopening the completed task.
+
+### Developer-Requested Corrections
+
+In `singleTaskMode`, direct developer feedback about the last completed implementation task is a continuation of that task, not new planned work. It takes precedence over selecting the next pending task, planner delegation, and incomplete-task reminders. Amend that task's existing implementation commit instead of creating a follow-up task.
+
+Use this route when the feedback is about the latest completed task and is not driven by `/j.check`, `check-review.md`, or checker/reviewer output. Re-read the original task's plan/spec/CONTEXT and amend its commit. Do not create a task, invoke `j.planner`, or modify `plan.md`.
+
+If later task work has started, stop and ask the developer to choose `/j.patch` or a forward-only follow-up. Keep forward-only follow-ups exclusively for `/j.check`/checker-driven corrections. Before amending, run the original task's scoped verification and update the existing task state and integration bookkeeping with the amended SHA by rerunning `record-task` and `integrate-task` for the same task id.
 
 When invoked with no specific file/task target, treat the whole `plan.md` as the source of work and inspect all tasks/waves before acting.
 
@@ -206,6 +214,7 @@ Behavior:
    - Total progress: `{completed}/{total}` tasks
 4. Do NOT proceed to the next task. Wait for the developer to invoke `/j.implement` again.
 5. This mode enables iterative review: the developer can inspect each task's output, request corrections, and only then proceed.
+6. Direct developer feedback about the completed task follows the amend rule above; it does not create a new task, alter the plan, or advance the plan.
 
 When `singleTaskMode` is `false` (default), the workflow owner executes all tasks across all waves as normal batch behavior.
 
@@ -227,10 +236,10 @@ For each write target, then for each wave in that target's plan:
   - `Context: {absolute target-local context path when present}`
   - `Task State: {absolute execution-state.md path}`
   - `Validator Work: {absolute validator-work.md path}`
-  - `Implementer Work: {absolute implementer-work.md path}`
-  - `Integration State: {absolute integration-state.json path}`
-  - `Task Files: {comma-separated absolute paths resolved from the task Files section}`
-  - and pass a task contract with `targetProject`, `targetRepoRoot`, `planPath`, `specPath`, `contextPath`, `taskStatePath`, `validatorWorkPath`, `retryStatePath`, `runtimePath`, `sessionsDir`, `implementerWorkPath`, `integrationStatePath`, and `taskFiles`
+   - `Implementer Work: {absolute implementer-work.md path}`
+   - `Integration State: {absolute integration-state.json path}`
+   - `Task Files: {comma-separated absolute paths resolved from the task Files section}`
+   - and pass a task contract with `targetProject`, `targetRepoRoot`, `planPath`, `specPath`, `contextPath`, `taskStatePath`, `validatorWorkPath`, `retryStatePath`, `runtimePath`, `sessionsDir`, `implementerWorkPath`, `integrationStatePath`, and `taskFiles`
 - On rerun, skip any task already marked COMPLETE in that target's `integration-state.json` and task state files.
 - Do not start the next task worker until the current task worker has finished its loop and its commit bookkeeping is written.
 - If a dependency is declared, do not start the dependent task until the dependency task state is COMPLETE and its commit is recorded in `integration-state.json`.
@@ -259,11 +268,18 @@ Context economy rules (apply to every step below):
 4. Read build/test configuration files that define executable test scope, such as `pom.xml`, Gradle files, Jest/Vitest config, Makefile, or package scripts.
 5. If `state/implementer-work.md` exists, read only the tail (last ~60 lines) plus any entries mentioning your task's `depends` ids — never the whole log; it grows linearly with completed tasks.
 6. Read the current plan task, especially `### Context References`, `### Files`, `### Action`, `### Verification`, `### Done Criteria`, and `Depends`.
+   - Resolve canon for every task file before editing and compare every Action/Done Criteria instruction with the applicable `AGENTS.md`, skill `SKILL.md`, `SYSTEM.md`, and `GOTCHAS.md` rules.
+   - Plan approval does not override explicit canon. If an instruction conflicts with an applicable rule, stop before editing, mark the task `BLOCKED`, and report the exact `PLAN_CONFLICT` with plan instruction, rule source, and rule text. Do not silently choose either side or preserve a canon violation to avoid fixture/test edits.
 7. Read dependency execution/validator state for each task in `depends`.
 8. If resuming, read the current task's execution state and validator log first.
 9. Use structured code tools first when locating symbols or mechanical edit targets.
 10. Read every file you will modify.
-11. Follow existing patterns exactly.
+11. Follow existing patterns exactly. This is an evidence-producing step, not a stylistic reminder:
+    - For an existing symbol, inspect that symbol at the task base commit and treat its current structure as the primary pattern. Describe the exact delta before editing.
+    - For a new construct, read at least one same-role local precedent; use up to two corroborating siblings when the local pattern is not obvious. Cross-repo canon is only a fallback after local evidence.
+    - Find direct callers/references for every constructor, public method, event payload, DTO, or serialization shape whose required fields/signature changes. Update callers explicitly instead of weakening the contract to make compilation pass.
+    - A compile/test error caused by a newly required argument is impact evidence. Do not add a default, nullable type, overload, fallback, compatibility branch, or broad catch merely to silence it unless persisted/wire compatibility or an explicit task contract requires that behavior.
+    - If the planned design intentionally diverges from the candidate-parent symbol or dominant local precedent, stop and cite the exact contract sentence that authorizes the divergence. Without one, treat it as a plan/context defect rather than inventing a variation.
 
 Path rule:
 
@@ -277,7 +293,7 @@ Task boundary rule:
 - Treat `CONTEXT.md` identifier mappings, anti-patterns, and canonical pattern choices as part of the task boundary.
 - Small incidental edits outside that list are acceptable only when mechanically required by the planned change.
 - If the task needs substantial edits to another task's file, stop and report a plan defect instead of widening scope ad hoc.
-- If `/j.check` requires additional substantial work after a task is COMPLETE, stop treating it as ownership of the completed task and create a new follow-up task in the plan/state trail.
+- If `/j.check` requires additional substantial work after a task is COMPLETE, stop treating it as ownership of the completed task and create a new follow-up task in the plan/state trail. Direct developer feedback between single tasks instead reuses the completed task and must not edit the plan.
 
 Test scope rule:
 
@@ -293,6 +309,7 @@ Test scope rule:
 - Follow existing patterns.
 - Do not leave placeholders.
 - Keep changes scoped to the task intent.
+- After compilation or test feedback, preserve the declared contract. Never trade a required invariant for a convenience default simply because updating impacted callers is broader than expected; either update mechanically impacted callers or stop on a real scope/compatibility ambiguity.
 
 ### STATE
 
@@ -307,7 +324,7 @@ Required state before commit:
 
 Commit directly on `feature/{feature-slug}` exactly once for this task.
 
-**Amend-on-resume rule**: Before creating a new commit, check whether a commit for this task already exists on the branch (e.g., from a previous interrupted attempt). Use `integration-state.json` or `git log --oneline feature/{feature-slug} --grep="task {id}"` to detect this. If a commit for the current task already exists:
+**Amend rule**: Before creating a new commit, check whether a commit for this task already exists on the branch (e.g., from a previous interrupted attempt or direct developer feedback in `singleTaskMode`). Use `integration-state.json` or `git log --oneline feature/{feature-slug} --grep="task {id}"` to detect this. If a commit for the current task already exists:
 
 ```bash
 git add {changed code/config files required by the task}
@@ -321,7 +338,7 @@ git add {changed code/config files required by the task}
 git commit -m "feat({scope}): {what changed} — task {id}"
 ```
 
-Each task gets **exactly one commit**. If resumed, always amend the existing task commit.
+Each task gets **exactly one commit**. Amend the existing task commit on resume or for direct developer feedback in `singleTaskMode`.
 
 Rules:
 
@@ -338,9 +355,9 @@ VALIDATED_COMMIT="$(git rev-parse HEAD)"
 
 ### NO AUTO-VALIDATION
 
-The implementer does NOT invoke `j.validator` after each task commit. Validation is handled by explicit validator tasks placed by the planner at strategic intervals in the plan. This saves time and tokens.
+The implementer does NOT invoke `j.validator` after each task commit. Validation is handled by explicit validator tasks placed by the planner at strategic intervals in the plan.
 
-After a successful commit, proceed directly to FINALIZE TASK STATE.
+After a successful commit, proceed to FINALIZE TASK STATE.
 
 ### FINALIZE TASK STATE
 

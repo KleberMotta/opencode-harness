@@ -44,7 +44,7 @@ Limite honesto (da própria doc): o anúncio é convite, não obrigação — o 
 *Embasamento: agentskill (convenções implícitas "an LLM cannot derive reliably from reading source files alone" — medir com analisadores determinísticos, LLM só sintetiza; Mimicry Test; evidência ≥3 exemplos; RED_LINES com quota); survey §3.1.2 (repositório agent-native: convenções como artefatos versionados consultados antes de agir).*
 
 ### B1. /j.finish-setup vira pipeline evidência→síntese — P1
-**Hoje:** as skills j.*-writing foram escritas à mão; nada garante que refletem o repo real (a parte TS do j.test-writing, por exemplo, é herança de template inaplicável aos repos Kotlin).
+**Hoje:** as skills j.*-writing foram escritas à mão; nada garante que refletem o repo real (uma skill genérica de teste pode carregar convenções de tecnologia errada).
 **Proposta:** adicionar a `.opencode/scripts/` analisadores determinísticos no molde do agentskill — `measure` (indentação real, p95 de linha, blank lines), `symbols` (clustering de nomes/afixos), `git` (prefixos de commit, naming de branch), `tests` (mapeamento teste→fonte, fixtures) — emitindo JSON. O `/j.finish-setup` passa a: rodar analisadores → LLM sintetiza skills/AGENTS **citando evidência** (regra só com ≥3 exemplos reais; menos → `[tentative]`; "prose describes, snippets prove") → seção RED_LINES com quota (≥10 proibições ancoradas no que ESTE repo evita). Re-runs preservam seções manuais (sidecar de pins, padrão `update` do agentskill).
 **Efeito:** cada regra nas skills passa a ter lastro medido — o antídoto contra o AGENTS.md genérico que o modelo ignora.
 

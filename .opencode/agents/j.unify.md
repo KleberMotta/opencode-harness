@@ -131,15 +131,15 @@ Acceptance example: with only `docs/domain/foo.md` changed during closeout, `/j.
 
 This step is controlled by `workflow.unify.proposeKnowledgePromotion` and defaults to `true`. Skip it (and report the intentional skip) when the toggle is `false` or when `workflow.automation.nonInteractive` is `true` — there is no developer available to approve.
 
-Contexts keep an OKF knowledge base in `{context}/agent-context/knowledge/` (e.g. `olxbr/agent-context/knowledge/`), where `drafts/` holds unimplemented intent (`status: draft`) and `domains/` plus `decisions/` hold implemented truth (`status: consolidated`).
+Contexts keep an OKF knowledge base in inherited `.context/knowledge/`, where `drafts/` holds unimplemented intent (`status: draft`) and `domains/` plus `decisions/` hold implemented truth (`status: consolidated`).
 
 When enabled:
 - Scan the feature artifacts — `$WORKSPACE_ROOT/docs/specs/{feature-slug}/CONTEXT.md`, `spec.md`, and `plan.md` — for references to OKF draft documents: any path containing `/knowledge/drafts/`.
 - For each referenced document, read its OKF frontmatter. Only documents still carrying `status: draft` are promotion candidates.
 - For each candidate whose intent this feature actually delivered, present a promotion proposal to the developer via the `question` tool. The proposal names the exact mechanical change:
-  1. move the file from `{context}/agent-context/knowledge/drafts/` to the appropriate consolidated directory (`{context}/agent-context/knowledge/domains/` for business/domain concepts, `decisions/` for decisions)
+   1. move the file from `.context/knowledge/drafts/` to the appropriate consolidated directory (`.context/knowledge/domains/` for business/domain concepts, `decisions/` for decisions)
   2. flip the frontmatter to `status: consolidated`
-  3. append an entry to the bundle's `log.md` (`{context}/agent-context/knowledge/log.md`): date, document, `{feature-slug}`, and a one-line reason
+   3. append an entry to the bundle's `log.md` (`.context/knowledge/log.md`): date, document, `{feature-slug}`, and a one-line reason
 - Apply the promotion ONLY after explicit developer approval. This step is ALWAYS a proposal — never promote automatically. A rejected or unanswered proposal leaves the draft untouched.
 - If the feature only partially implements the draft, say so in the proposal and recommend keeping it as a draft with a note instead of promoting.
 - Promotions touch context directories outside the write targets; they are never part of the Step 5.5 doc-sync commit or the Step 6.5 artifact commit.
