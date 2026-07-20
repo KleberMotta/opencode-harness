@@ -13,6 +13,7 @@ import {
   writeExecutionState,
   writePersistentContext,
 } from "../../lib/test-utils"
+import { contextRootsForFile } from "../../../lib/j.workspace-paths"
 
 let tempRoot = ""
 
@@ -2674,5 +2675,51 @@ describe("context injection plugins", () => {
     expect(system).toContain("# Payment Patterns")
     expect(system).toContain("ORDER-DOMAIN-MARKER")
     expect(system).not.toContain("CASHOUT-DISTRACTOR")
+  })
+})
+
+describe("contextRootsForFile — canon topology", () => {
+  test("resolves product files, canon files inside .context, and the ancestor chain", () => {
+    const ws = createTempDir("juninho-context-roots-")
+    try {
+      // {ws}/contexts is the canon repo with its own .git — this reproduces the
+      // overshoot that previously made canon-file resolution return [] (the file
+      // resolves to the contexts repo's .git, whose parent is the workspace).
+      const contexts = path.join(ws, "contexts")
+      mkdirSync(contexts, { recursive: true })
+      createGitRepo(contexts)
+
+      // Org-wide marker + team marker: a repo inherits every ancestor .context.
+      const orgMarker = path.join(contexts, ".context")
+      mkdirSync(orgMarker, { recursive: true })
+      const teamMarker = path.join(contexts, "trp", ".context")
+      mkdirSync(path.join(teamMarker, "skills", "x"), { recursive: true })
+      writeFileSync(path.join(teamMarker, "skills", "x", "SKILL.md"), "---\nname: x\n---\n")
+      writeFileSync(path.join(teamMarker, "AGENTS.md"), "canon agents\n")
+
+      // Product repo nested beside the team marker (its own .git).
+      const repo = path.join(contexts, "trp", "repo-a")
+      mkdirSync(path.join(repo, "src", "main"), { recursive: true })
+      createGitRepo(repo)
+      writeFileSync(path.join(repo, "src", "main", "Foo.kt"), "class Foo\n")
+
+      // A repo outside contexts/ inherits no canon.
+      const outside = path.join(ws, "other", "repo-b")
+      mkdirSync(path.join(outside, "src"), { recursive: true })
+      createGitRepo(outside)
+      writeFileSync(path.join(outside, "src", "Bar.kt"), "class Bar\n")
+
+      // Product file: nearest team marker first, org marker inherited.
+      expect(contextRootsForFile(ws, path.join(repo, "src", "main", "Foo.kt"))).toEqual([teamMarker, orgMarker])
+
+      // Canon files INSIDE the team .context — the regression case (was []).
+      expect(contextRootsForFile(ws, path.join(teamMarker, "skills", "x", "SKILL.md"))).toEqual([teamMarker, orgMarker])
+      expect(contextRootsForFile(ws, path.join(teamMarker, "AGENTS.md"))).toEqual([teamMarker, orgMarker])
+
+      // Outside contexts/: no canon.
+      expect(contextRootsForFile(ws, path.join(outside, "src", "Bar.kt"))).toEqual([])
+    } finally {
+      removeDir(ws)
+    }
   })
 })

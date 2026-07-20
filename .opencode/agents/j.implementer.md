@@ -324,21 +324,26 @@ Required state before commit:
 
 Commit directly on `feature/{feature-slug}` exactly once for this task.
 
-**Amend rule**: Before creating a new commit, check whether a commit for this task already exists on the branch (e.g., from a previous interrupted attempt or direct developer feedback in `singleTaskMode`). Use `integration-state.json` or `git log --oneline feature/{feature-slug} --grep="task {id}"` to detect this. If a commit for the current task already exists:
+**Amend rule**: `git commit --amend` rewrites whatever commit is at `HEAD`, so before amending you MUST verify that `HEAD` is actually THIS task's own commit. Amend ONLY when one of these is true:
+
+- `git rev-parse HEAD` equals the task's `validatedCommit` in `integration-state.json`, OR
+- the HEAD subject (`git log -1 --format=%s`) contains `task {id}`.
+
+If neither holds, `HEAD` belongs to something else — the base branch, another task, or an unrelated commit — so create a NEW commit; never amend it. This holds even when `plan.md` tells you to amend a specific candidate SHA: if that SHA is not the current `HEAD` (the state was reset, the candidate was discarded, IntelliJ/git rebase moved it), treat this task's commit as nonexistent and create a new commit. If the task's commit exists somewhere but is NOT the current `HEAD`, stop and report instead of amending.
 
 ```bash
+# resume / singleTaskMode developer feedback — HEAD verified to be this task's commit:
 git add {changed code/config files required by the task}
 git commit --amend --no-edit
 ```
 
-If no commit for this task exists yet (first attempt or fresh start):
-
 ```bash
+# first attempt, fresh start, or HEAD is not this task's commit:
 git add {changed code/config files required by the task}
 git commit -m "feat({scope}): {what changed} — task {id}"
 ```
 
-Each task gets **exactly one commit**. Amend the existing task commit on resume or for direct developer feedback in `singleTaskMode`.
+Each task gets **exactly one commit**. Amend only after confirming the current `HEAD` is this task's own commit.
 
 Rules:
 

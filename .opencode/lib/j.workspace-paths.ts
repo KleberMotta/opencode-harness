@@ -158,19 +158,31 @@ export function contextRootsForFile(workspaceRoot: string, filePath: string): st
   if (!filePath) return []
   const contextsRoot = path.join(path.resolve(workspaceRoot), CONTEXTS_DIR)
   const absolutePath = path.resolve(filePath)
+  // Only files under {workspace}/contexts inherit canon. Guard on the file
+  // itself, not on the containing repo: a file inside a `.context/` resolves to
+  // the contexts repo's own .git, whose parent is the workspace root.
+  if (!absolutePath.startsWith(contextsRoot + path.sep) && absolutePath !== contextsRoot) return []
+
   const relativeToContexts = normalizePath(path.relative(contextsRoot, absolutePath))
   const pathSegments = relativeToContexts.split("/")
   const markerIndex = pathSegments.lastIndexOf(".context")
-  const projectRoot = findContainingProjectRoot(workspaceRoot, filePath)
-  let current = projectRoot ? path.dirname(projectRoot) : absolutePath
-  if (!current.startsWith(contextsRoot + path.sep) && current !== contextsRoot) return []
 
   const roots: string[] = []
+  let current: string
   if (markerIndex >= 0) {
+    // The target lives inside a `.context/`; that marker is the nearest canon.
     const marker = path.join(contextsRoot, ...pathSegments.slice(0, markerIndex + 1))
     roots.push(marker)
     current = path.dirname(marker)
+  } else {
+    // Product file: start at the containing repo's parent so the repo's own
+    // subtree cannot shadow a sibling `.context`. When the path is not inside a
+    // nested product repo, findContainingProjectRoot overshoots to the contexts
+    // repo itself — fall back to the file's own directory then.
+    const projectRoot = findContainingProjectRoot(workspaceRoot, filePath)
+    current = projectRoot && projectRoot !== contextsRoot ? path.dirname(projectRoot) : path.dirname(absolutePath)
   }
+
   while (current.startsWith(contextsRoot)) {
     const marker = path.join(current, ".context")
     if (existsSync(marker) && !roots.includes(marker)) roots.push(marker)
