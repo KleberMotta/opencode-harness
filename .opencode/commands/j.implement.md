@@ -43,7 +43,7 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
 14. A task is only marked COMPLETE after its single implementation commit succeeds and task bookkeeping for that commit is recorded successfully.
 15. The task commit must contain code/config deliverables only; do not create a second commit for state artifacts during implementation.
 16. If `workflow.implement.watchdogSessionStale` is enabled, watchdog notifications may surface stalled sessions, but notifications never block the run.
-17. If a commit for the current task already exists, uses `git commit --amend` to maintain exactly one commit per task. This includes an interrupted attempt/resume and direct developer feedback about the latest completed task in `singleTaskMode`.
+17. To maintain exactly one commit per task, `git commit --amend` is used ONLY when the current `HEAD` is verified to be this task's own commit (`HEAD` SHA matches the task's `validatedCommit` in `integration-state.json`, or the HEAD subject contains `task {id}`). Otherwise — HEAD is the base branch or an unrelated commit — a NEW commit is created; `--amend` never rewrites a commit that isn't this task's, even if `plan.md` names a candidate SHA to amend (if that SHA isn't HEAD, treat the task commit as nonexistent). This amend-on-resume applies to interrupted attempts and direct developer feedback about the latest completed task in `singleTaskMode`.
 18. Exit only when code changes and task-level tests are complete for every write target on `feature/{feature-slug}`.
 19. The caller then runs `.opencode/scripts/check-all.sh` or `/j.check` for repo-wide verification.
 20. If the repo-wide check fails, delegate back to `@j.implementer` with the failing output and those generated artifacts.
@@ -88,7 +88,7 @@ After a task is marked COMPLETE and its commit is recorded — back in this orch
 Then act on the verdict, up to `workflow.review.maxAttempts` attempts per task:
 
 - `PASS`: continue (select the next task, or in `singleTaskMode` report and stop).
-- `FAIL`: the pattern was violated and the reviewer has already improved the canon/harness. Undo and redo the task against the improved canon — `git reset --hard {commit}^` on the target repo, clear the task's `execution-state.md` and its `integration-state.json` entry, re-delegate the task to `@j.implementer`, then review again.
+- `FAIL`: the pattern was violated and the reviewer has already improved the canon/harness. Undo and redo the task against the improved canon. First confirm the target repo's `HEAD` is this task's `validatedCommit` (from `integration-state.json`); only then `git reset --hard {validatedCommit}^` — never reset a HEAD that isn't this task's commit (stop and report instead). Then clear the task's `execution-state.md` and its `integration-state.json` entry, re-delegate the task to `@j.implementer`, and review again.
 - Cap reached: stop and surface `docs/specs/{feature-slug}/state/tasks/task-{id}/canon-review.md` to the developer.
 
 Run this per task, before moving on. In `singleTaskMode`, run it for the single task before reporting and stopping. This is the same review the loop driver dispatches; here it fires from the normal `/j.implement` flow so it works in an interactive session without `npm run loop`.
