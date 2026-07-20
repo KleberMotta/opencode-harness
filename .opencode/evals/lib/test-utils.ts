@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, cpSync, existsSync } from "fs"
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, cpSync, existsSync } from "fs"
 import os from "os"
 import path from "path"
 import { spawnSync, type SpawnSyncOptions } from "child_process"
@@ -18,7 +18,11 @@ export function opencodeRoot(): string {
 }
 
 export function createTempDir(prefix: string): string {
-  return mkdtempSync(path.join(os.tmpdir(), prefix))
+  // Canonicalize the temp root so on-disk paths the plugins/CLI produce (which they
+  // resolve through the real filesystem) compare equal to the ones tests build from
+  // this root. Without this, a symlinked tmpdir (macOS default `/var` -> `/private/var`,
+  // or a TMPDIR under a symlinked path) makes byte-for-byte path assertions diverge.
+  return realpathSync(mkdtempSync(path.join(os.tmpdir(), prefix)))
 }
 
 export function removeDir(target: string): void {
@@ -77,6 +81,7 @@ export function scaffoldHarnessRepo(root: string): void {
     ".opencode/scripts/_detect-stack.sh",
     ".opencode/scripts/_read-config.sh",
     ".opencode/scripts/harness-feature-integration.sh",
+    ".opencode/scripts/commit-context-canon.sh",
     ".opencode/scripts/scaffold-spec-state.sh",
     ".opencode/hooks/pre-commit",
     ".opencode/templates/spec-state-readme.md",

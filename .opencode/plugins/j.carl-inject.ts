@@ -1,7 +1,13 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { existsSync, readdirSync, readFileSync } from "fs"
 import path from "path"
-import { contextAssetsDir, findContextRoot, loadActivePlanTarget, loadActivePlanTargets, resolvePathFromProjectRoot, resolveProjectPaths } from "../lib/j.workspace-paths"
+import {
+  contextRootsForFile,
+  loadActivePlanTarget,
+  loadActivePlanTargets,
+  resolvePathFromProjectRoot,
+  resolveProjectPaths,
+} from "../lib/j.workspace-paths"
 import { featureStateTaskPaths } from "../lib/j.feature-state-paths"
 import { argFilePath, toolIs } from "../lib/j.tool-compat"
 
@@ -102,7 +108,13 @@ const GENERIC_CARL_KEYWORDS = new Set([
 const STARTUP_DOMAIN_SCORE_FLOOR_RATIO = 0.65
 const FLOW_DOMAINS_WITH_BALANCE_COMPANION = new Set(["Cashout", "Orders", "Order", "Operational-entry", "Inactive-fee"])
 const BALANCE_COMPANION_SIGNALS = ["available", "balance", "credit", "debit", "escrow", "loss", "reserve"]
-const STARTUP_SEEDED_SUBAGENTS = new Set(["j.implementer", "j.checker", "j.planner", "j.spec-writer", "j.test-writer"])
+const STARTUP_SEEDED_SUBAGENTS = new Set([
+  "j.implementer",
+  "j.checker",
+  "j.planner",
+  "j.spec-writer",
+  "j.test-writer",
+])
 
 function shouldSeedStartupPrompt(prompt: string, subagentType?: string): boolean {
   if (subagentType && STARTUP_SEEDED_SUBAGENTS.has(subagentType)) return true
@@ -520,9 +532,9 @@ function effectiveRecallKeywords(entry: PrincipleEntry | DomainEntry, options?: 
 }
 
 // Bases whose docs/principles + docs/domain are scanned: the target project
-// roots first (project docs win the collector's first-added dedupe), then the
-// assets dir of any containing context ({context}/agent-context) — the
-// harness-wide precedence is project > context > workspace.
+// roots first (project docs win the collector's first-added dedupe), then an
+// nearest and ancestor `.context` roots. First-added dedupe preserves:
+// project > nearest context > ancestor contexts > workspace.
 function docsBaseRoots(directory: string, activePlanHints?: ActivePlanHints): string[] {
   const targets = activeTargetsForHints(directory, activePlanHints ?? {})
   const projectPathsList = targets.length > 0
@@ -537,10 +549,11 @@ function docsBaseRoots(directory: string, activePlanHints?: ActivePlanHints): st
     roots.push(projectPaths.projectRoot)
   }
   for (const projectPaths of projectPathsList) {
-    const contextAssets = contextAssetsDir(findContextRoot(directory, projectPaths.projectRoot))
-    if (!contextAssets || seen.has(contextAssets)) continue
-    seen.add(contextAssets)
-    roots.push(contextAssets)
+    for (const contextRoot of contextRootsForFile(directory, projectPaths.projectRoot)) {
+      if (seen.has(contextRoot)) continue
+      seen.add(contextRoot)
+      roots.push(contextRoot)
+    }
   }
   return roots
 }

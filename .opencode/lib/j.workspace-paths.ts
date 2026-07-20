@@ -55,6 +55,7 @@ const IGNORED_DIRS = new Set([
   ".git",
   ".idea",
   ".opencode",
+  ".context",
   "build",
   "dist",
   "node_modules",
@@ -62,11 +63,12 @@ const IGNORED_DIRS = new Set([
   "tmp",
 ])
 
-// First-level workspace dirs that are harness/infra, never a repo-grouping context.
-export const CONTEXT_SPECIAL_DIRS = new Set([".opencode", "docs", "tmp", "node_modules"])
+// First-level workspace dirs that are harness/infra, never product repositories.
+// Shared canon contexts live below {workspace}/contexts/<context-name>/.
+export const CONTEXT_SPECIAL_DIRS = new Set([".opencode", "contexts", "docs", "tmp", "node_modules"])
+export const CONTEXTS_DIR = "contexts"
 
 const discoveryCache = new Map<string, string[]>()
-const contextRootCache = new Map<string, string>()
 
 function normalizePath(filePath: string): string {
   return filePath.replace(/\\/g, "/")
@@ -77,9 +79,13 @@ function looksLikeProjectRoot(directory: string): boolean {
   return existsSync(path.join(directory, ".git")) || (existsSync(path.join(directory, "opencode.json")) && existsSync(path.join(directory, "docs")))
 }
 
-function walkProjects(current: string, depth: number, found: Set<string>): void {
+function walkProjects(current: string, depth: number, found: Set<string>, workspaceRoot: string): void {
   if (depth < 0 || !existsSync(current)) return
-  if (looksLikeProjectRoot(current)) {
+  const contextsRoot = path.join(workspaceRoot, CONTEXTS_DIR)
+  // The workspace root is the harness repository, not a product target. Keep
+  // walking below it so product repositories such as olxbr/trp-seller-api are
+  // discoverable even though the workspace itself has a .git directory.
+  if (current !== workspaceRoot && current !== contextsRoot && looksLikeProjectRoot(current)) {
     found.add(current)
     return
   }
@@ -94,7 +100,8 @@ function walkProjects(current: string, depth: number, found: Set<string>): void 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     if (IGNORED_DIRS.has(entry.name)) continue
-    walkProjects(path.join(current, entry.name), depth - 1, found)
+    if (current === workspaceRoot && CONTEXT_SPECIAL_DIRS.has(entry.name) && entry.name !== CONTEXTS_DIR) continue
+    walkProjects(path.join(current, entry.name), depth - 1, found, workspaceRoot)
   }
 }
 
@@ -115,8 +122,7 @@ export function discoverWorkspaceProjects(workspaceRoot: string): string[] {
   if (cached) return cached
 
   const found = new Set<string>()
-  if (looksLikeProjectRoot(workspaceRoot)) found.add(workspaceRoot)
-  walkProjects(workspaceRoot, 4, found)
+  walkProjects(workspaceRoot, 4, found, workspaceRoot)
 
   const projects = uniqueSorted(found)
   discoveryCache.set(workspaceRoot, projects)
@@ -144,41 +150,74 @@ export function findContainingProjectRoot(workspaceRoot: string, targetPath: str
   return null
 }
 
-// Context layer: a "context" is a first-level workspace dir that groups repos
-// (e.g. {workspace}/olxbr, {workspace}/KleberMotta). Its shared assets live in
-// {context}/agent-context/ (AGENTS.md, skills/, skill-map.json, docs/, ...).
-// Precedence across the harness: project > context > workspace.
-export function findContextRoot(workspaceRoot: string, filePath: string): string | null {
-  if (!filePath) return null
-  const normalizedWorkspaceRoot = path.resolve(workspaceRoot)
-  const relative = path.relative(normalizedWorkspaceRoot, path.resolve(filePath))
-  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) return null
+// Canon contexts are filesystem markers, not names. Any directory below
+// {workspace}/contexts may define shared canon by containing `.context/`.
+// Product repositories live as siblings of that marker. A repo inherits every
+// ancestor marker up to contexts/, nearest first for precedence.
+export function contextRootsForFile(workspaceRoot: string, filePath: string): string[] {
+  if (!filePath) return []
+  const contextsRoot = path.join(path.resolve(workspaceRoot), CONTEXTS_DIR)
+  const absolutePath = path.resolve(filePath)
+  const relativeToContexts = normalizePath(path.relative(contextsRoot, absolutePath))
+  const pathSegments = relativeToContexts.split("/")
+  const markerIndex = pathSegments.lastIndexOf(".context")
+  const projectRoot = findContainingProjectRoot(workspaceRoot, filePath)
+  let current = projectRoot ? path.dirname(projectRoot) : absolutePath
+  if (!current.startsWith(contextsRoot + path.sep) && current !== contextsRoot) return []
 
-  const firstLevel = normalizePath(relative).split("/")[0]
-  if (!firstLevel || firstLevel.startsWith(".") || CONTEXT_SPECIAL_DIRS.has(firstLevel)) return null
-
-  const candidate = path.join(normalizedWorkspaceRoot, firstLevel)
-  const cached = contextRootCache.get(candidate)
-  if (cached) return cached
-
-  let result: string | null = null
-  try {
-    if (statSync(candidate).isDirectory()) result = candidate
-  } catch {
-    result = null
+  const roots: string[] = []
+  if (markerIndex >= 0) {
+    const marker = path.join(contextsRoot, ...pathSegments.slice(0, markerIndex + 1))
+    roots.push(marker)
+    current = path.dirname(marker)
   }
-  // Only cache hits: a context created after a negative lookup must become
-  // visible without a restart, and re-checking a miss is a single statSync.
-  if (result) contextRootCache.set(candidate, result)
-  return result
+  while (current.startsWith(contextsRoot)) {
+    const marker = path.join(current, ".context")
+    if (existsSync(marker) && !roots.includes(marker)) roots.push(marker)
+    if (current === contextsRoot) break
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return roots
+}
+
+export function discoverContextRoots(workspaceRoot: string): string[] {
+  const contextsRoot = path.join(path.resolve(workspaceRoot), CONTEXTS_DIR)
+  const found: string[] = []
+
+  function walk(current: string) {
+    if (!existsSync(current)) return
+    if (current !== contextsRoot && existsSync(path.join(current, ".git"))) return
+    const marker = path.join(current, ".context")
+    if (existsSync(marker)) found.push(marker)
+
+    let entries: ReturnType<typeof readdirSync>
+    try {
+      entries = readdirSync(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".") || IGNORED_DIRS.has(entry.name)) continue
+      walk(path.join(current, entry.name))
+    }
+  }
+
+  walk(contextsRoot)
+  return uniqueSorted(found)
+}
+
+export function findContextRoot(workspaceRoot: string, filePath: string): string | null {
+  return contextRootsForFile(workspaceRoot, filePath)[0] ?? null
 }
 
 export function contextAssetsDir(contextRoot: string | null | undefined): string | null {
-  if (!contextRoot) return null
-  const assetsDir = path.join(contextRoot, "agent-context")
-  return existsSync(assetsDir) ? assetsDir : null
+  return contextRoot && existsSync(contextRoot) ? contextRoot : null
 }
 
+// Backward-compatible name for callers that previously modeled a dedicated
+// project overlay. The nearest `.context` is the project-containing canon.
 function scoreProjectMatch(workspaceRoot: string, projectRoot: string, text: string): number {
   const normalizedText = normalizePath(text)
   const relativeRoot = normalizePath(path.relative(workspaceRoot, projectRoot))

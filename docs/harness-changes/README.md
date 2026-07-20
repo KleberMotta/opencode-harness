@@ -18,7 +18,7 @@ Cada registro contém o change contract completo (escrito ANTES de aplicar a mud
 
 | Campo | Significado |
 | --- | --- |
-| `surface` | A única superfície alterada (agent, command, plugin, script, skill, skill-map, AGENTS do contexto ou lint-rules do contexto). Exatamente 1 falha → exatamente 1 superfície. |
+| `surface` | A única superfície alterada (agent, command, plugin, script, skill, skill-map, `contexts/{context}/AGENTS.md` ou lint-rules do contexto). Exatamente 1 falha → exatamente 1 superfície. |
 | `failure_mechanism` | O mecanismo raiz da falha (não o sintoma), em uma frase. |
 | `evidence` | Ponteiros/trechos verbatim: diff da correção do dev, trecho de check-review.md, trace de sessão. Obrigatório — proposta sem failure pattern é rejeitada. |
 | `expected_effect` | Que comportamento observável muda com a alteração. |
@@ -34,7 +34,7 @@ Além do contract: `evals` (resultado da suite completa + impact suites rodadas)
 # 001 — dto-immutability-lint-rule
 
 ## Change contract
-- surface: {context}/agent-context/lint-rules/dto-immutability.yml
+- surface: contexts/{context}/lint-rules/dto-immutability.yml
 - failure_mechanism: nada detecta mecanicamente `var` em data classes de DTO; a skill só recomenda em prosa
 - evidence: PR #91, hunk em CashoutRequestData.kt (dev trocou `var amount` por `val amount`); check-review.md 2026-07-10, seção "Findings"
 - expected_effect: detekt falha o build quando um DTO declara propriedade mutável

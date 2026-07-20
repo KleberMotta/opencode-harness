@@ -1,7 +1,7 @@
 # OpenCode Behavioral Eval Report
 
 - Tasks: 1
-- Passed: 1/1
+- Passed: 0/1
 
 ## Task 1
 
@@ -9,19 +9,20 @@
 - Preferred tool: task
 - Preferred tool used: yes
 - Tool calls: 1
-- Duration: 21.41s
-- Transcript: /Users/kleber.motta/repos/tmp/juninho-behavioral-SIgLvu/eval-output.jsonl
-- Sandbox: /Users/kleber.motta/repos/tmp/juninho-behavioral-SIgLvu
+- Duration: 19.95s
+- Transcript: /var/folders/0n/65lbp6zs0yv8wyxwwb10p07r0000gn/T/juninho-behavioral-R2QqJ3/eval-output.jsonl
+- Sandbox: /var/folders/0n/65lbp6zs0yv8wyxwwb10p07r0000gn/T/juninho-behavioral-R2QqJ3
 - Orchestrator feedback: <none>
 - Expected answer: startup-context=ready
 - Actual answer: startup-context=ready
+- Task error: child startup context did not include expected principle/domain markers
 - Answer match: yes
 ```json
 {
   "task": {
     "count": 1,
     "durationsMs": [
-      5548
+      4789
     ]
   }
 }

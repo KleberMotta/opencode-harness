@@ -12,7 +12,7 @@ Creating or editing any file under `docs/principles/`, including `docs/principle
 
 1. **Write the principle from this repo's code.** A principle doc captures a cross-cutting technical pattern several modules already follow. If you cannot name three files in this repo that follow it, you are writing a preference, not a principle. Business rules go to `docs/domain/*`; directory-local working rules go to that directory's `AGENTS.md`.
 
-2. **Use the section set from the canon.** `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/principles/async-messaging-patterns.md`: a one-paragraph statement of the pattern → `Problem this principle solves` → `Rule set` → `Rationale and trade-offs` → `Canonical examples in this repository` (real paths, one line each saying what each proves).
+2. **Use the section set from the canon.** `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/principles/async-messaging-patterns.md`: a one-paragraph statement of the pattern → `Problem this principle solves` → `Rule set` → `Rationale and trade-offs` → `Canonical examples in this repository` (real paths, one line each saying what each proves).
 
 3. **Register the doc in `docs/principles/manifest` in the exact parsed format.** `parsePrinciplesManifest` in `/Users/kleber.motta/repos/.opencode/plugins/j.carl-inject.ts` is the only thing that turns a file on disk into an injected principle:
 
@@ -55,7 +55,7 @@ Creating or editing any file under `docs/principles/`, including `docs/principle
 
 ## Canonical Example
 
-A registered, repo-specific principle. The manifest entry format, from `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/principles/manifest`:
+A registered, repo-specific principle. The manifest entry format, from `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/principles/manifest`:
 
 ```
 AUTH_STATE=active
@@ -63,7 +63,7 @@ AUTH_RECALL=auth, authentication, login, logout, session, token, jwt, oauth, cle
 AUTH_FILE=docs/principles/auth-patterns.md
 ```
 
-And the doc worth pointing at — the head of `/Users/kleber.motta/repos/olxbr/trp-financial-api/docs/principles/async-messaging-patterns.md`:
+And the doc worth pointing at — the head of `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/principles/async-messaging-patterns.md`:
 
 ```markdown
 <!-- juninho:sync source=src/main/kotlin/br/com/olx/trp/financial/messaging/MessagingService.kt hash=manual -->

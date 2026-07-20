@@ -1,6 +1,6 @@
 {
   "name": "juninho-harness",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "private": true,
   "description": "CLI utilitário para o harness Juninho (.opencode) — edita config, ativa planos e inspeciona estado sem abrir sessão",
   "type": "module",
@@ -21,6 +21,8 @@
     "state:clear-task": "bun .opencode/cli/state-clear-task.ts",
     "skills:list": "bun .opencode/cli/skills-list.ts",
     "skills:coverage": "bun .opencode/cli/skills-coverage.ts",
+    "context:resolve": "bun .opencode/cli/context-resolve.ts",
+    "canon:audit": "bun .opencode/cli/canon-audit.ts",
     "agents:list": "bun .opencode/cli/agents-list.ts",
     "hooks:install": "sh .opencode/scripts/install-target-hooks.sh",
     "eval": "node .opencode/evals/run-layer.mjs all",
@@ -51,6 +53,8 @@
     "eval:behavioral:unify-loop": "JUNINHO_EVAL_OFFSET=15 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-unify-loop-report.md",
     "eval:behavioral:checker-startup": "JUNINHO_EVAL_OFFSET=16 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-checker-startup-report.md",
     "eval:behavioral:planner-startup": "JUNINHO_EVAL_OFFSET=17 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-planner-startup-report.md",
-    "eval:behavioral:spec-startup": "JUNINHO_EVAL_OFFSET=18 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-spec-startup-report.md"
+    "eval:behavioral:spec-startup": "JUNINHO_EVAL_OFFSET=18 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-spec-startup-report.md",
+    "eval:behavioral:canon-review-required-default": "JUNINHO_EVAL_OFFSET=20 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-canon-review-required-default-report.md",
+    "eval:behavioral:canon-review-optional-default": "JUNINHO_EVAL_OFFSET=21 JUNINHO_EVAL_LIMIT=1 bun .opencode/evals/lib/opencode-behavioral-runner.ts .opencode/evals/behavioral.xml .opencode/evals/reports/behavioral-canon-review-optional-default-report.md"
   }
 }

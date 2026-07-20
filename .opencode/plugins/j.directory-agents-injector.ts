@@ -1,20 +1,25 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { existsSync, readFileSync } from "fs"
 import path from "path"
-import { contextAssetsDir, findContainingProjectRoot, findContextRoot } from "../lib/j.workspace-paths"
+import {
+  contextRootsForFile,
+  findContainingProjectRoot,
+} from "../lib/j.workspace-paths"
 import { argFilePath, toolIs } from "../lib/j.tool-compat"
 
 // Tier 1 context mechanism — hierarchical AGENTS.md injection.
 // When an agent reads a file, walks the directory tree from the file's location
 // to the project root and appends every AGENTS.md found to the Read output.
-// When the file lives under a workspace context (e.g. {workspace}/olxbr), the
-// context's shared AGENTS.md ({context}/agent-context/AGENTS.md) is injected
+// When the file lives beside one or more `.context` markers, their AGENTS.md
+// files are injected ancestor → nearest
 // first (most general → most specific, additive layered context).
 // The workspace-root AGENTS.md is never injected — OpenCode auto-loads it.
 // Uses tool.execute.after on Read — appends to output.output.
 
 function findAgentsMdFiles(filePath: string, projectRoot: string): string[] {
   const result: string[] = []
+  const rootAgents = path.join(projectRoot, "AGENTS.md")
+  if (existsSync(rootAgents)) result.push(rootAgents)
   let current = path.dirname(filePath)
 
   // Walk up to project root (exclusive — root AGENTS.md is auto-loaded by OpenCode)
@@ -29,11 +34,12 @@ function findAgentsMdFiles(filePath: string, projectRoot: string): string[] {
   return result
 }
 
-function findContextAgentsMd(workspaceRoot: string, filePath: string): string | null {
-  const contextAssets = contextAssetsDir(findContextRoot(workspaceRoot, filePath))
-  if (!contextAssets) return null
-  const agentsMd = path.join(contextAssets, "AGENTS.md")
-  return existsSync(agentsMd) ? agentsMd : null
+function findContextAgentsMd(workspaceRoot: string, filePath: string): string[] {
+  return contextRootsForFile(workspaceRoot, filePath)
+    .slice()
+    .reverse()
+    .map((root) => path.join(root, "AGENTS.md"))
+    .filter((file) => existsSync(file))
 }
 
 export default (async ({ directory }: { directory: string }) => {
@@ -57,9 +63,7 @@ export default (async ({ directory }: { directory: string }) => {
 
       const agentsMdFiles = findAgentsMdFiles(filePath, projectRoot)
 
-      // Context AGENTS.md goes first: more general than anything nested in the project.
-      const contextAgentsMd = findContextAgentsMd(directory, filePath)
-      if (contextAgentsMd) agentsMdFiles.unshift(contextAgentsMd)
+      agentsMdFiles.unshift(...findContextAgentsMd(directory, filePath))
 
       const toInject: string[] = []
 

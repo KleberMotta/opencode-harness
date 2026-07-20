@@ -1,19 +1,48 @@
 import { existsSync, readFileSync, statSync } from "fs"
 import path from "path"
-import { contextAssetsDir, findContainingProjectRoot, findContextRoot } from "./j.workspace-paths"
+import {
+  contextRootsForFile,
+  findContainingProjectRoot,
+} from "./j.workspace-paths"
 
 // Shared skill-map resolution: merging, regex compilation and SKILL.md lookup.
 // Single source of truth for j.skill-inject.ts (runtime injection) and
 // .opencode/cli/skills-coverage.ts (static audit) — both must answer
 // "which skills fire for this file?" identically, otherwise the audit lies.
 //
-// Precedence across the harness: project > context > workspace.
+// Precedence across the harness: project > nearest context > ancestor contexts > workspace.
 
 export type SkillSource = "project" | "context" | "workspace" | "default"
 
 export interface SkillMapEntry {
   pattern: string
   skill: string
+}
+
+// Plans are durable artifacts. Keep old skill IDs resolvable while their
+// context maps and future plans use the stack-specific names.
+export const LEGACY_SKILL_ALIASES: Record<string, string> = {
+  "j.api-client-writing": "j.spring-feign-client-writing",
+  "j.client-writing": "j.spring-client-boundary-writing",
+  "j.configuration-writing": "j.spring-configuration-writing",
+  "j.controller-writing": "j.spring-mvc-controller-writing",
+  "j.dto-writing": "j.spring-web-dto-writing",
+  "j.entity-writing": "j.spring-jpa-entity-writing",
+  "j.exception-writing": "j.spring-domain-exception-writing",
+  "j.listener-writing": "j.spring-sqs-listener-writing",
+  "j.mapper-writing": "j.kotlin-mapper-writing",
+  "j.migration-writing": "j.flyway-migration-writing",
+  "j.model-writing": "j.kotlin-domain-model-writing",
+  "j.python-script-writing": "j.python-runtime-validation-writing",
+  "j.repository-writing": "j.spring-data-jpa-repository-writing",
+  "j.seller-domain-model-writing": "j.spring-seller-domain-model-writing",
+  "j.service-writing": "j.spring-domain-service-writing",
+  "j.test-writing": "j.spring-test-writing",
+  "j.utility-writing": "j.kotlin-utility-writing",
+}
+
+export function canonicalSkillName(skillName: string): string {
+  return LEGACY_SKILL_ALIASES[skillName] ?? skillName
 }
 
 export type CompiledEntry = {
@@ -23,8 +52,9 @@ export type CompiledEntry = {
 }
 
 export const DEFAULT_ENTRIES: SkillMapEntry[] = [
-  { pattern: "\\.test\\.(ts|tsx|js|jsx)$", skill: "j.test-writing" },
-  { pattern: "\\.spec\\.(ts|tsx|js|jsx)$", skill: "j.test-writing" },
+  { pattern: "\\.test\\.(ts|tsx|js|jsx)$", skill: "j.frontend-test-writing" },
+  { pattern: "\\.spec\\.(ts|tsx|js|jsx)$", skill: "j.frontend-test-writing" },
+  { pattern: "(^|/)test_[^/]+\\.py$|(^|/)[^/]+_test\\.py$", skill: "j.python-test-writing" },
   { pattern: "(^|\\/)AGENTS\\.md$", skill: "j.agents-md-writing" },
   { pattern: "(^|\\/)\\.opencode\\/skills\\/[^/]+\\/SKILL\\.md$|(^|\\/)\\.opencode\\/skill-map\\.json$|(^|\\/)\\.opencode\\/evals\\/.*(skill|behavioral).*(\\.xml|\\.json|\\.md|\\.ts)$", skill: "skill-creator" },
   { pattern: "docs\\/domain\\/.*\\.md$", skill: "j.domain-doc-writing" },
@@ -68,58 +98,82 @@ export function loadMergedSkillMap(workspaceRoot: string, filePath: string): Com
   const workspaceMap = readMapFile(path.join(workspaceRoot, ".opencode", "skill-map.json"))
 
   let projectMap: SkillMapEntry[] = []
-  let contextMap: SkillMapEntry[] = []
+  let contextMaps: SkillMapEntry[][] = []
   if (filePath) {
     const projectRoot = findContainingProjectRoot(workspaceRoot, filePath)
     if (projectRoot && projectRoot !== workspaceRoot) {
       projectMap = readMapFile(path.join(projectRoot, ".opencode", "skill-map.json"))
     }
-    const contextAssets = contextAssetsDir(findContextRoot(workspaceRoot, filePath))
-    if (contextAssets) {
-      contextMap = readMapFile(path.join(contextAssets, "skill-map.json"))
-    }
+    contextMaps = contextRootsForFile(workspaceRoot, filePath).map((root) =>
+      readMapFile(path.join(root, "skill-map.json"))
+    )
   }
 
-  // Merge: project entries first (precedence), then context, then workspace,
+  // Merge: project entries first, then nearest/ancestor contexts, then workspace,
   // then defaults if all empty.
   const projectCompiled = compileEntries(projectMap, "project")
-  const contextCompiled = compileEntries(contextMap, "context")
+  const contextCompiledByRoot = contextMaps.map((entries) => compileEntries(entries, "context"))
   const workspaceCompiled = compileEntries(workspaceMap, "workspace")
 
-  if (projectCompiled.length === 0 && contextCompiled.length === 0 && workspaceCompiled.length === 0) {
+  if (
+    projectCompiled.length === 0 &&
+    contextCompiledByRoot.every((entries) => entries.length === 0) &&
+    workspaceCompiled.length === 0
+  ) {
     return compileEntries(DEFAULT_ENTRIES, "default")
   }
 
-  // Deduplicate by skill name preferring the most specific source: a project
-  // pattern for skill X overrides a context pattern for skill X, which
-  // overrides a workspace pattern for skill X.
+  // Deduplicate by skill name preferring the most specific source.
   const projectSkills = new Set(projectCompiled.map((e) => e.skill))
-  const filteredContext = contextCompiled.filter((e) => !projectSkills.has(e.skill))
-  const contextSkills = new Set(filteredContext.map((e) => e.skill))
-  const filteredWorkspace = workspaceCompiled.filter((e) => !projectSkills.has(e.skill) && !contextSkills.has(e.skill))
+  const contextSkills = new Set<string>()
+  const filteredContext: CompiledEntry[] = []
+  for (const contextEntries of contextCompiledByRoot) {
+    for (const entry of contextEntries) {
+      if (projectSkills.has(entry.skill) || contextSkills.has(entry.skill)) continue
+      contextSkills.add(entry.skill)
+      filteredContext.push(entry)
+    }
+  }
+  const filteredWorkspace = workspaceCompiled.filter(
+    (e) =>
+      !projectSkills.has(e.skill) &&
+      !contextSkills.has(e.skill)
+  )
   return [...projectCompiled, ...filteredContext, ...filteredWorkspace]
 }
 
 export function resolveSkillPath(directory: string, skillName: string, filePath?: string): string | null {
+  const canonicalName = canonicalSkillName(skillName)
+  // Prefer the exact identifier when it exists. This preserves workspace and
+  // sandbox skills that intentionally retain a legacy ID, while old persisted
+  // plans still resolve to the renamed context skill as a fallback.
+  const candidateNames = canonicalName === skillName ? [skillName] : [skillName, canonicalName]
+
+  function firstSkillPath(baseDir: string): string | null {
+    for (const candidateName of candidateNames) {
+      const candidate = path.join(baseDir, "skills", candidateName, "SKILL.md")
+      if (existsSync(candidate)) return candidate
+    }
+    return null
+  }
+
   // Check target project root skills first when a file path is available
   if (filePath) {
     const projectRoot = findContainingProjectRoot(directory, filePath)
     if (projectRoot && projectRoot !== directory) {
-      const projectPath = path.join(projectRoot, ".opencode", "skills", skillName, "SKILL.md")
-      if (existsSync(projectPath)) return projectPath
+      const projectPath = firstSkillPath(path.join(projectRoot, ".opencode"))
+      if (projectPath) return projectPath
     }
 
-    // Context assets next: {context}/agent-context/skills/{name}/SKILL.md
-    const contextAssets = contextAssetsDir(findContextRoot(directory, filePath))
-    if (contextAssets) {
-      const contextPath = path.join(contextAssets, "skills", skillName, "SKILL.md")
-      if (existsSync(contextPath)) return contextPath
+    for (const contextRoot of contextRootsForFile(directory, filePath)) {
+      const contextPath = firstSkillPath(contextRoot)
+      if (contextPath) return contextPath
     }
   }
 
   // Workspace skills as fallback
-  const workspacePath = path.join(directory, ".opencode", "skills", skillName, "SKILL.md")
-  if (existsSync(workspacePath)) return workspacePath
+  const workspacePath = firstSkillPath(path.join(directory, ".opencode"))
+  if (workspacePath) return workspacePath
 
   return null
 }
@@ -133,14 +187,13 @@ export function createSkillMapResolver(directory: string, cacheLimit = 256): (fi
 
   return function getSkillMap(filePath: string): CompiledEntry[] {
     const projectRoot = filePath ? findContainingProjectRoot(directory, filePath) ?? directory : directory
-    const contextRoot = filePath ? findContextRoot(directory, filePath) : null
-    const contextAssets = contextAssetsDir(contextRoot)
+    const contextRoots = filePath ? contextRootsForFile(directory, filePath) : []
     const mtimes = [
       mapFileMtime(path.join(directory, ".opencode", "skill-map.json")),
-      contextAssets ? mapFileMtime(path.join(contextAssets, "skill-map.json")) : 0,
+      ...contextRoots.map((root) => mapFileMtime(path.join(root, "skill-map.json"))),
       projectRoot !== directory ? mapFileMtime(path.join(projectRoot, ".opencode", "skill-map.json")) : 0,
     ]
-    const key = `${projectRoot}::${contextRoot ?? ""}::${mtimes.join(":")}`
+    const key = `${projectRoot}::${contextRoots.join("|")}::${mtimes.join(":")}`
     const cached = mapCache.get(key)
     if (cached) return cached
     if (mapCache.size >= cacheLimit) mapCache.clear()

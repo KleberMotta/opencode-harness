@@ -8,7 +8,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "
 import os from "os"
 import path from "path"
 import { loadJuninhoConfig } from "../lib/j.juninho-config"
-import { loadActivePlanTargets } from "../lib/j.workspace-paths"
+import { discoverContextRoots, loadActivePlanTargets } from "../lib/j.workspace-paths"
 
 const WORKSPACE_ROOT = path.resolve(import.meta.dir, "..", "..")
 
@@ -118,24 +118,20 @@ checks.push(
     : { ok: false, warn: true, label: "docker indisponível", fix: "suba o Docker; repos Spring precisam de `make dependencies` para integration tests (/j.check tenta subir sozinho)" }
 )
 
-// 6. Contextos ({workspace}/*/agent-context): repo git + skills/ + knowledge/
-const contextDirs = (() => {
-  try {
-    return readdirSync(WORKSPACE_ROOT, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => path.join(WORKSPACE_ROOT, entry.name, "agent-context"))
-      .filter((dir) => existsSync(dir))
-      .sort((left, right) => left.localeCompare(right))
-  } catch {
-    return [] as string[]
-  }
-})()
+// 6. Contextos ({workspace}/contexts/*): one Git repository + skills/ + knowledge/
+const contextsRoot = path.join(WORKSPACE_ROOT, "contexts")
+checks.push(
+  existsSync(path.join(contextsRoot, ".git"))
+    ? { ok: true, label: "repositório Git de contexts ok" }
+    : { ok: false, warn: true, label: "repositório Git de contexts ausente", fix: `inicialize ou clone em ${contextsRoot}` }
+)
+const contextDirs = discoverContextRoots(WORKSPACE_ROOT)
 for (const contextDir of contextDirs) {
   const contextLabel = path.relative(WORKSPACE_ROOT, contextDir)
   const missing: string[] = []
-  if (!existsSync(path.join(contextDir, ".git"))) missing.push("repo git (git init)")
-  if (!existsSync(path.join(contextDir, "skills"))) missing.push("skills/")
-  if (!existsSync(path.join(contextDir, "knowledge"))) missing.push("knowledge/")
+  if (!existsSync(path.join(contextDir, "AGENTS.md")) && !existsSync(path.join(contextDir, "skill-map.json"))) {
+    missing.push("AGENTS.md or skill-map.json")
+  }
   checks.push(
     missing.length === 0
       ? { ok: true, label: `contexto ok em ${contextLabel}` }

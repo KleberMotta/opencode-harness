@@ -13,7 +13,7 @@ Invoke the `@j.checker` agent to run the full repository verification after `@j.
 
 ```
 /j.check
-/j.check /Users/kleber.motta/repos/olxbr/trp-seller-api
+/j.check /Users/kleber.motta/repos/contexts/trp/trp-seller-api
 ```
 
 ## What runs

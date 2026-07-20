@@ -32,6 +32,8 @@ Invoke the `@j.planner` agent to create an actionable plan from a goal.
 11. If a later `/j.check` pass finds required changes after a task is already COMPLETE, the planner should express that work as a new follow-up task instead of reopening the completed one
 12. The plan must spell out every ambiguous business/implementation decision in task text, especially identifier mappings, transaction boundaries, error semantics, integration contracts, and canonical patterns to follow
 
+Direct developer feedback about a completed task in `singleTaskMode` is not planning input. Do not invoke `/j.plan`, add a task, or modify `plan.md`; route it back to the completed task for correction and amend.
+
 ## Delegation Rule (MANDATORY)
 
 You MUST delegate this task to `@j.planner` using the `task()` tool.

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { cpSync, existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from "fs"
+import { createHash } from "crypto"
+import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from "fs"
 import path from "path"
 import { loadPlugin, PluginHarness } from "../../lib/plugin-harness"
 import {
+  createGitRepo,
   createTempDir,
   removeDir,
   repoRoot,
+  runCommand,
   writeActivePlan,
   writeExecutionState,
   writePersistentContext,
@@ -293,14 +296,12 @@ async function createHarness(pluginNames: string[], options?: { client?: MockSes
   return new PluginHarness(plugins)
 }
 
-// Context layer scaffold: {tempRoot}/ctx is a first-level workspace dir that
-// groups repos, with shared assets in {tempRoot}/ctx/agent-context and a
-// project at {tempRoot}/ctx/repo-a (empty .git dir satisfies
+// Context layer scaffold: `.context` marks canon and the repo is its sibling.
 // looksLikeProjectRoot). Must be created BEFORE the harness runs any plugin
 // hook — j.workspace-paths caches discovery results per path.
 function scaffoldContextLayer(): { contextAssets: string; projectRoot: string } {
-  const contextAssets = path.join(tempRoot, "ctx", "agent-context")
-  const projectRoot = path.join(tempRoot, "ctx", "repo-a")
+  const contextAssets = path.join(tempRoot, "contexts", "ctx", ".context")
+  const projectRoot = path.join(tempRoot, "contexts", "ctx", "repo-a")
   mkdirSync(path.join(projectRoot, ".git"), { recursive: true })
   mkdirSync(path.join(projectRoot, "src"), { recursive: true })
   mkdirSync(contextAssets, { recursive: true })
@@ -541,20 +542,13 @@ describe("context injection plugins", () => {
     writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
     const harness = await createHarness(["j.plan-autoload.ts"])
 
-    // An orphaned hint with a taskID sits in the queue, but the child title
-    // carries no "Execute task" marker, so the title (authoritative) wins and
-    // the session is not task-scoped.
+    // Prompt-only hints must not scope arbitrary children. A structured task
+    // contract is tested separately and remains authoritative across UI titles.
     await harness.runToolBefore(
       { tool: "task", sessionID: "nontask-parent", callID: "1" },
       {
         args: {
           prompt: "Execute task 1\nAttempt: 1",
-          contract: {
-            taskID: "1",
-            planPath: "docs/specs/feature-x/plan.md",
-            specPath: "docs/specs/feature-x/spec.md",
-            contextPath: "docs/specs/feature-x/CONTEXT.md",
-          },
         },
       }
     )
@@ -573,6 +567,41 @@ describe("context injection plugins", () => {
     expect(system).toContain("TASK-ONE-ONLY-MARKER")
     expect(system).toContain("TASK-TWO-ONLY-MARKER")
     expect(system).not.toContain("task-scoped session")
+  })
+
+  test("plan-autoload preserves task scope from a structured contract when the UI title is arbitrary", async () => {
+    writeFileSync(path.join(tempRoot, "docs", "specs", "feature-x", "plan.md"), twoTaskPlan(), "utf-8")
+    writeActivePlan(tempRoot, "docs/specs/feature-x/plan.md")
+    const harness = await createHarness(["j.plan-autoload.ts"])
+
+    await harness.runToolBefore(
+      { tool: "task", sessionID: "contract-parent", callID: "1" },
+      {
+        args: {
+          prompt: "Implement seller preferences",
+          contract: {
+            taskID: "1",
+            planPath: "docs/specs/feature-x/plan.md",
+            specPath: "docs/specs/feature-x/spec.md",
+            contextPath: "docs/specs/feature-x/CONTEXT.md",
+          },
+        },
+      }
+    )
+    await harness.runEvent({
+      type: "session.created",
+      properties: {
+        sessionID: "contract-child",
+        info: { parentID: "contract-parent", title: "Implement seller preferences (@j.implementer subagent)" },
+      },
+    })
+
+    const output = { message: {}, parts: [] as unknown[] }
+    await harness.runChatMessage({ sessionID: "contract-child" }, output)
+    const system = typeof output.message.system === "string" ? output.message.system : ""
+    expect(system).toContain("task-scoped session for Task 1")
+    expect(system).toContain("TASK-ONE-ONLY-MARKER")
+    expect(system).not.toContain("TASK-TWO-ONLY-MARKER")
   })
 
   test("plan-autoload re-injects only the task section on compaction for task-scoped sessions", async () => {
@@ -658,6 +687,31 @@ describe("context injection plugins", () => {
     expect(nonTriggerSession.output).not.toContain("j.mapper-writing")
   })
 
+  test("skill injector blocks apply_patch before an unread matching file is edited", async () => {
+    const harness = await createHarness(["j.skill-inject.ts"])
+    const filePath = path.join(tempRoot, "src", "feature", "SampleController.kt")
+
+    await expect(harness.runToolBefore(
+      { tool: "apply_patch", sessionID: "patch-skill-session", callID: "1" },
+      {
+        args: {
+          patchText: `*** Begin Patch\n*** Update File: ${filePath}\n@@\n-class SampleController\n+class UpdatedController\n*** End Patch`,
+        },
+      }
+    )).rejects.toThrow("[skill-inject] READ_REQUIRED")
+
+    const read = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "patch-skill-session", callID: "2", args: { filePath } }, read)
+    await harness.runToolBefore(
+      { tool: "apply_patch", sessionID: "patch-skill-session", callID: "3" },
+      {
+        args: {
+          patchText: `*** Begin Patch\n*** Update File: ${filePath}\n@@\n-class SampleController\n+class UpdatedController\n*** End Patch`,
+        },
+      }
+    )
+  })
+
   test("skill injector activates multiple skills when multiple patterns match the same file", async () => {
     writeFileSync(
       path.join(tempRoot, ".opencode", "skill-map.json"),
@@ -740,6 +794,45 @@ describe("context injection plugins", () => {
     expect(controllerRead.output).toContain("[skill-inject] Skill activated for j.controller-writing (workspace)")
   })
 
+  test("skill-inject gives the nearest context precedence over an ancestor context", async () => {
+    const ancestor = path.join(tempRoot, "contexts", "org", ".context")
+    const contextAssets = path.join(tempRoot, "contexts", "org", "team", ".context")
+    const projectRoot = path.join(tempRoot, "contexts", "org", "team", "repo-a")
+    mkdirSync(path.join(projectRoot, ".git"), { recursive: true })
+    mkdirSync(path.join(projectRoot, "src"), { recursive: true })
+    mkdirSync(path.join(ancestor, "skills", "j.shared-skill"), { recursive: true })
+    mkdirSync(path.join(contextAssets, "skills", "j.shared-skill"), { recursive: true })
+    writeFileSync(
+      path.join(ancestor, "skill-map.json"),
+      JSON.stringify([{ pattern: "Overlay\\.kt$", skill: "j.shared-skill" }], null, 2) + "\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(contextAssets, "skill-map.json"),
+      JSON.stringify([{ pattern: "Overlay\\.kt$", skill: "j.shared-skill" }], null, 2) + "\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(ancestor, "skills", "j.shared-skill", "SKILL.md"),
+      "---\nname: j.shared-skill\ndescription: ancestor context skill\n---\n\nANCESTOR-CONTEXT-MARKER\n",
+      "utf-8"
+    )
+    writeFileSync(
+      path.join(contextAssets, "skills", "j.shared-skill", "SKILL.md"),
+      "---\nname: j.shared-skill\ndescription: nearest context skill\n---\n\nNEAREST-CONTEXT-MARKER\n",
+      "utf-8"
+    )
+    const filePath = path.join(projectRoot, "src", "SampleOverlay.kt")
+    writeFileSync(filePath, "class SampleOverlay\n", "utf-8")
+
+    const harness = await createHarness(["j.skill-inject.ts"])
+    const output = { title: "Read", output: readFileSync(filePath, "utf-8"), metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "ctx-overlay", callID: "1", args: { filePath } }, output)
+
+    expect(output.output).toContain("NEAREST-CONTEXT-MARKER")
+    expect(output.output).not.toContain("ANCESTOR-CONTEXT-MARKER")
+  })
+
   test("directory-agents-injector includes context-level AGENTS.md before nested ones", async () => {
     const { contextAssets, projectRoot } = scaffoldContextLayer()
     writeFileSync(path.join(contextAssets, "AGENTS.md"), "# Context Rules\n\nCONTEXT-AGENTS-MARKER\n", "utf-8")
@@ -752,7 +845,7 @@ describe("context injection plugins", () => {
     const read = { title: "Read", output: readFileSync(fooPath, "utf-8"), metadata: {} }
     await harness.runToolAfter({ tool: "read", sessionID: "ctx-agents-s1", callID: "1", args: { filePath: fooPath } }, read)
 
-    expect(read.output).toContain("[directory-agents-injector] Context from ctx/agent-context/AGENTS.md")
+    expect(read.output).toContain("[directory-agents-injector] Context from contexts/ctx/.context/AGENTS.md")
     expect(read.output).toContain("CONTEXT-AGENTS-MARKER")
     expect(read.output).toContain("[directory-agents-injector] Context from src/AGENTS.md")
     expect(read.output).toContain("NESTED-AGENTS-MARKER")
@@ -760,6 +853,32 @@ describe("context injection plugins", () => {
     expect(read.output.indexOf("CONTEXT-AGENTS-MARKER")).toBeLessThan(read.output.indexOf("NESTED-AGENTS-MARKER"))
     // Workspace-root AGENTS.md stays out — OpenCode auto-loads it.
     expect(read.output).not.toContain("WORKSPACE-ROOT-AGENTS-MARKER")
+  })
+
+  test("directory-agents-injector orders ancestor context before nearest context and repository", async () => {
+    const ancestor = path.join(tempRoot, "contexts", "org", ".context")
+    const nearest = path.join(tempRoot, "contexts", "org", "team", ".context")
+    const projectRoot = path.join(tempRoot, "contexts", "org", "team", "repo-a")
+    mkdirSync(path.join(projectRoot, ".git"), { recursive: true })
+    mkdirSync(path.join(projectRoot, "src"), { recursive: true })
+    mkdirSync(ancestor, { recursive: true })
+    mkdirSync(nearest, { recursive: true })
+    writeFileSync(path.join(ancestor, "AGENTS.md"), "ANCESTOR-CONTEXT-MARKER\n", "utf-8")
+    writeFileSync(path.join(nearest, "AGENTS.md"), "NEAREST-CONTEXT-MARKER\n", "utf-8")
+    writeFileSync(path.join(projectRoot, "AGENTS.md"), "REPOSITORY-MARKER\n", "utf-8")
+    const filePath = path.join(projectRoot, "src", "Foo.kt")
+    writeFileSync(filePath, "class Foo\n", "utf-8")
+
+    const harness = await createHarness(["j.directory-agents-injector.ts"])
+    const output = { title: "Read", output: "class Foo\n", metadata: {} }
+    await harness.runToolAfter({ tool: "read", sessionID: "hierarchy", callID: "1", args: { filePath } }, output)
+
+    const ancestorIndex = output.output.indexOf("ANCESTOR-CONTEXT-MARKER")
+    const nearestIndex = output.output.indexOf("NEAREST-CONTEXT-MARKER")
+    const repoIndex = output.output.indexOf("REPOSITORY-MARKER")
+    expect(ancestorIndex).toBeGreaterThanOrEqual(0)
+    expect(ancestorIndex).toBeLessThan(nearestIndex)
+    expect(nearestIndex).toBeLessThan(repoIndex)
   })
 
   test("carl-inject loads principles from context assets", async () => {
@@ -1617,6 +1736,147 @@ describe("context injection plugins", () => {
         { args: { filePath: path.join(tempRoot, ".env.test") } }
       )
     ).rejects.toThrow("[env-protection] Blocked access to sensitive file")
+  })
+
+  describe("artifact-ownership guard", () => {
+    // Persists a stage-tagged session runtime the same way j.task-runtime does
+    // at runtime, so j.artifact-ownership can resolve the session's role from
+    // disk. Uses the REAL opencode contract (lowercase tool ids, camelCase
+    // args) throughout — a guard that matched "Write"/"file_path" would never
+    // fire under opencode, so every assertion drives it the way opencode does.
+    async function seedRoleSession(
+      harness: PluginHarness,
+      options: { parent: string; child: string; taskID: string; stage: "implement" | "canon-review" }
+    ): Promise<void> {
+      await harness.runToolBefore(
+        { tool: "task", sessionID: options.parent, callID: "1" },
+        {
+          args: {
+            prompt: `Stage: ${options.stage}\nTask: ${options.taskID}\ndocs/specs/feature-x/plan.md`,
+            contract: {
+              taskID: options.taskID,
+              stage: options.stage,
+              planPath: "docs/specs/feature-x/plan.md",
+              specPath: "docs/specs/feature-x/spec.md",
+              contextPath: "docs/specs/feature-x/CONTEXT.md",
+            },
+          },
+        }
+      )
+      await harness.runEvent({
+        type: "session.created",
+        properties: { sessionID: options.child, info: { parentID: options.parent, title: `Task ${options.taskID}` } },
+      })
+    }
+
+    test("session runtime is stage-tagged on disk (the wiring the guard depends on)", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-impl", child: "impl-child", taskID: "1", stage: "implement" })
+      const runtime = JSON.parse(
+        readFileSync(
+          path.join(tempRoot, "docs", "specs", "feature-x", "state", "sessions", "impl-child-runtime.json"),
+          "utf-8"
+        )
+      ) as { stage: string }
+      expect(runtime.stage).toBe("implement")
+    })
+
+    test("implementer is blocked from writing plan.md (real opencode tool + arg names)", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-impl", child: "impl-child", taskID: "1", stage: "implement" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "impl-child", callID: "9" },
+          { args: { filePath: path.join(tempRoot, "docs", "specs", "feature-x", "plan.md") } }
+        )
+      ).rejects.toThrow("[artifact-ownership] IMPLEMENTER_ARTIFACT_BLOCKED")
+    })
+
+    test("implementer is blocked from redirecting bash output into plan.md", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-impl", child: "impl-child", taskID: "1", stage: "implement" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "bash", sessionID: "impl-child", callID: "9" },
+          { args: { command: "echo forged >> docs/specs/feature-x/plan.md" } }
+        )
+      ).rejects.toThrow("[artifact-ownership] IMPLEMENTER_ARTIFACT_BLOCKED")
+    })
+
+    test("implementer may write product code and its own execution state", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-impl", child: "impl-child", taskID: "1", stage: "implement" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "impl-child", callID: "1" },
+          { args: { filePath: path.join(tempRoot, "src", "feature", "SampleController.kt") } }
+        )
+      ).resolves.toBeUndefined()
+      await expect(
+        harness.runToolBefore(
+          { tool: "edit", sessionID: "impl-child", callID: "2" },
+          {
+            args: {
+              filePath: path.join(tempRoot, "docs", "specs", "feature-x", "state", "tasks", "task-1", "execution-state.md"),
+            },
+          }
+        )
+      ).resolves.toBeUndefined()
+    })
+
+    test("reviewer is blocked from writing product code", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-rev", child: "rev-child", taskID: "1", stage: "canon-review" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "rev-child", callID: "1" },
+          { args: { filePath: path.join(tempRoot, "src", "feature", "SampleController.kt") } }
+        )
+      ).rejects.toThrow("[artifact-ownership] REVIEWER_ARTIFACT_BLOCKED")
+    })
+
+    test("reviewer is blocked from writing plan.md", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-rev", child: "rev-child", taskID: "1", stage: "canon-review" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "rev-child", callID: "2" },
+          { args: { filePath: path.join(tempRoot, "docs", "specs", "feature-x", "plan.md") } }
+        )
+      ).rejects.toThrow("[artifact-ownership] REVIEWER_ARTIFACT_BLOCKED")
+    })
+
+    test("reviewer may write its review artifact and canon/harness fixes", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      await seedRoleSession(harness, { parent: "p-rev", child: "rev-child", taskID: "1", stage: "canon-review" })
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "rev-child", callID: "1" },
+          {
+            args: {
+              filePath: path.join(tempRoot, "docs", "specs", "feature-x", "state", "tasks", "task-1", "canon-review.json"),
+            },
+          }
+        )
+      ).resolves.toBeUndefined()
+      await expect(
+        harness.runToolBefore(
+          { tool: "edit", sessionID: "rev-child", callID: "2" },
+          { args: { filePath: path.join(tempRoot, ".opencode", "skills", "j.controller-writing", "SKILL.md") } }
+        )
+      ).resolves.toBeUndefined()
+    })
+
+    test("guard is inert for sessions without an implement/canon-review runtime", async () => {
+      const harness = await createHarness(["j.task-runtime.ts", "j.artifact-ownership.ts"])
+      // No seeded runtime for this session id → stage resolves to null → no-op.
+      await expect(
+        harness.runToolBefore(
+          { tool: "write", sessionID: "unknown-session", callID: "1" },
+          { args: { filePath: path.join(tempRoot, "docs", "specs", "feature-x", "plan.md") } }
+        )
+      ).resolves.toBeUndefined()
+    })
   })
 
   test("task runtime binds spawned task sessions to feature-local runtime files", async () => {

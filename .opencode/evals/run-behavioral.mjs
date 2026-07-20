@@ -23,6 +23,8 @@ const suites = {
     ["eval:behavioral:implement-loop", "behavioral implement loop"],
     ["eval:behavioral:check-loop", "behavioral check loop"],
     ["eval:behavioral:unify-loop", "behavioral unify loop"],
+    ["eval:behavioral:canon-review-required-default", "behavioral canon-review required default"],
+    ["eval:behavioral:canon-review-optional-default", "behavioral canon-review optional default"],
   ],
   tools: [
     ["eval:behavioral:tools", "behavioral tools"],
@@ -44,6 +46,8 @@ const suites = {
     ["eval:behavioral:checker-startup", "behavioral checker startup"],
     ["eval:behavioral:planner-startup", "behavioral planner startup"],
     ["eval:behavioral:spec-startup", "behavioral spec startup"],
+    ["eval:behavioral:canon-review-required-default", "behavioral canon-review required default"],
+    ["eval:behavioral:canon-review-optional-default", "behavioral canon-review optional default"],
   ],
 }
 

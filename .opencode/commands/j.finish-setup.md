@@ -73,7 +73,7 @@ Conventions are MEASURED, not described: deterministic analyzers emit facts, the
    ```
    Its JSON output (`measure`, `symbols`, `git`, `tests`, `config` — every number carries real `samples`) is the evidence base for this phase. Do not re-derive by eyeballing what the analyzer already measured. An omitted field means "no evidence" — never fill the gap by guessing.
 8. **Evidence-gated synthesis.** For each discovered pattern, create a skill:
-   - **Location** — skills that encode a project's conventions go to the **context layer**: `{context}/agent-context/skills/j.{pattern}-writing/SKILL.md` (e.g. `olxbr/agent-context/skills/`), NOT the workspace `.opencode/skills/`. Only harness-generic skills (rare) stay at the harness root.
+    - **Location** — shared skills go to the nearest inherited `.context/skills/`; project-specific skills go to the product repo's `.opencode/skills/`. Only harness-generic skills stay at the workspace root.
    - Frontmatter with `name`, `description`
    - "When this skill activates" with the glob patterns from the project
    - "Required Steps" extracted from the exemplar file analysis
@@ -85,7 +85,7 @@ Conventions are MEASURED, not described: deterministic analyzers emit facts, the
      - `## Mimicry Test` — the final self-check: "If an agent followed only this skill, would the code come out mergeable without style fixes?" If the honest answer is no, the skill is missing conventions — go back to the analyzer JSON and the exemplars until the answer is yes.
    - Before finalizing or revising any skill, load and apply the local `skill-creator` skill so the description, trigger criteria, and eval hooks are explicit
 9. Register and prove each skill:
-   - Update the skill map where the skill lives: `{context}/agent-context/skill-map.json` for context-layer skills, `.opencode/skill-map.json` (harness root) for workspace skills — adding new regex patterns for each skill
+    - Update the skill map where the skill lives: `.context/skill-map.json`, product `.opencode/skill-map.json`, or workspace `.opencode/skill-map.json`
    - For every created or changed skill, add intelligent eval coverage that proves:
      - the skill triggers under realistic prompts
      - near-miss prompts do not trigger it
@@ -138,7 +138,7 @@ When `@j.explore` returns its report:
 
 After completion, the target project will have:
 - Hierarchical `AGENTS.md` files aligned to the real directory structure
-- Custom skills registered in the context layer (`{context}/agent-context/skills/`) — or at the harness root for generic ones — backed by measured evidence from `analyze-conventions.sh`, each ending with `RED_LINES` and the Mimicry Test
+- Custom skills registered in inherited `.context/skills/` or product `.opencode/skills/` — backed by measured evidence from `analyze-conventions.sh`, each ending with `RED_LINES` and the Mimicry Test
 - Domain documentation populated with real business domains at `$PROJECT_ROOT/docs/domain/`
 - Principles documentation reflecting actual codebase patterns at `$PROJECT_ROOT/docs/principles/`
 - Updated local automation stubs and command references

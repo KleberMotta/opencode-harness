@@ -9,9 +9,16 @@ const ALLOWED_TOP = new Set([
 const ALLOWED_WORKFLOW = new Set([
   "automation",
   "implement",
+  "review",
   "unify",
   "documentation",
   "telemetry",
+])
+
+const ALLOWED_REVIEW = new Set([
+  "plan",
+  "implement",
+  "maxAttempts",
 ])
 
 const ALLOWED_TELEMETRY = new Set([
@@ -77,6 +84,7 @@ const wf = config.workflow ?? {}
 issues.push(...unknownKeys(wf, ALLOWED_WORKFLOW, "workflow"))
 if (wf.automation) issues.push(...unknownKeys(wf.automation, ALLOWED_AUTOMATION, "workflow.automation"))
 if (wf.implement) issues.push(...unknownKeys(wf.implement, ALLOWED_IMPLEMENT, "workflow.implement"))
+if (wf.review) issues.push(...unknownKeys(wf.review, ALLOWED_REVIEW, "workflow.review"))
 if (wf.unify) issues.push(...unknownKeys(wf.unify, ALLOWED_UNIFY, "workflow.unify"))
 if (wf.documentation) issues.push(...unknownKeys(wf.documentation, ALLOWED_DOCUMENTATION, "workflow.documentation"))
 if (wf.telemetry) issues.push(...unknownKeys(wf.telemetry, ALLOWED_TELEMETRY, "workflow.telemetry"))

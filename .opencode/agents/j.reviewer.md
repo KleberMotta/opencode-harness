@@ -92,7 +92,7 @@ If the caller provides an output path, include that path in your response so the
 - Review artifact: {path to check-review.md or caller-provided output path}
 - Validation contract: {path to functional-validation-plan.md or "N/A"}
 - Next action: {what /j.implement should do next}
-- Task handling: {reuse current in-progress task | create new follow-up task | N/A}
+- Task handling: {reuse current in-progress task | create new follow-up task for checker-driven findings | N/A}
 
 ## Overall: LGTM | LGTM_WITH_NOTES | NEEDS_WORK
 ```

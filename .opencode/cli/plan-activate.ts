@@ -9,7 +9,8 @@ if (!projectArg || !slug) {
   die("uso: bun plan:activate <project> <slug>\nexemplo: bun plan:activate olxbr/trp-seller-api seller-creation-service")
 }
 
-const repoRoot = path.resolve(process.env.HOME ?? "", "repos", projectArg)
+const workspaceRoot = path.resolve(import.meta.dir, "..", "..")
+const repoRoot = path.isAbsolute(projectArg) ? projectArg : path.resolve(workspaceRoot, projectArg)
 if (!existsSync(repoRoot) || !statSync(repoRoot).isDirectory()) {
   die(`repositório não encontrado: ${repoRoot}`)
 }

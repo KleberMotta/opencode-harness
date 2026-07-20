@@ -9,7 +9,7 @@ You are the **Test Writer** — you create and fix unit and integration tests fo
 
 ## Skill
 
-You MUST load the `j.test-writing` skill at the start of every session by Reading its SKILL.md. It lives in the context layer: `{workspace}/{context}/agent-context/skills/j.test-writing/SKILL.md` (for OLX repos: `olxbr/agent-context/skills/j.test-writing/SKILL.md`, resolved from the workspace root). The skill-inject plugin also injects it automatically when you touch `*Test.kt` files, but do not rely on that alone — Read it explicitly first. It defines the mandatory structure, import checklist, anti-patterns, and rules you follow.
+You MUST resolve the applicable technology-specific test skill at the start of every session. Read the target path using this precedence: repository-local skill, nearest `.context`, ancestor `.context`, workspace. Spring/Kotlin uses `j.spring-test-writing`, Python uses `j.python-test-writing`, and frontend uses `j.frontend-test-writing` unless overridden. Read the resolved SKILL.md explicitly first.
 
 ---
 
@@ -144,7 +144,7 @@ If you discover implementation bugs while writing tests, report them in this for
 When unsure about a pattern, consult in this order:
 1. Existing tests in the same project (same module/package)
 2. Tests in `trp-financial-api` for the same pattern type
-3. The `j.test-writing` skill rules (already loaded)
+3. The applicable test-writing skill rules (already loaded)
 
 Never invent conventions. If the org does it one way, follow that way.
 

@@ -6,6 +6,7 @@ import { performance } from "perf_hooks"
 import { spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { parseEvaluationFile, type EvalTask } from "./eval-parser"
+import { buildCanonAuditCoverage, canonAuditVerdict } from "../../lib/j.canon-audit"
 
 type ToolMetric = {
   count: number
@@ -687,6 +688,10 @@ function seedImplementCommandSandboxVariant(root: string) {
   // Hermetic config: without this the sandbox inherits the machine-level
   // juninho-config.json via ancestor walk (singleTaskMode=true would stop the
   // run after task 1 and skip the validator task).
+  // review disabled so the loop smoke (implement/check/unify — all seed through
+  // this variant) measures loop behavior itself rather than auto-dispatching the
+  // reviewer mid-run and paying extra iterations. The canon-review evals seed via
+  // a separate variant and call the reviewer directly, so they are unaffected.
   writeFileSync(
     path.join(root, ".opencode", "juninho-config.json"),
     JSON.stringify(
@@ -694,6 +699,7 @@ function seedImplementCommandSandboxVariant(root: string) {
         workflow: {
           automation: { nonInteractive: true, autoApproveArtifacts: true },
           implement: { singleTaskMode: false },
+          review: { plan: false, implement: false },
         },
       },
       null,
@@ -730,6 +736,8 @@ function seedImplementCommandSandboxVariant(root: string) {
     ].join("\n"),
     "utf-8"
   )
+  spawnSync("git", ["add", "."], { cwd: root, stdio: "ignore" })
+  spawnSync("git", ["commit", "-m", "seed implement workflow"], { cwd: root, stdio: "ignore" })
 }
 
 function seedCheckCommandSandboxVariant(root: string) {
@@ -842,8 +850,11 @@ OUTPUT="docs/specs/feature-x/state/check-all-output.txt"
   echo "[juninho:check-all] Command: sh .opencode/scripts/check-all.sh"
   echo "[juninho:check-all] Running on branch: $(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
   echo "[juninho:check-all] Running formatting checks..."
+  sh .opencode/scripts/lint-structure.sh
   echo "[juninho:check-all] Running build verification..."
+  sh .opencode/scripts/build-verify.sh
   echo "[juninho:check-all] Running repo-wide tests..."
+  sh .opencode/scripts/test-related.sh
   echo "[juninho:check-all] Result: PASS"
   echo "[juninho:check-all] Exit code: 0"
 } | tee "$OUTPUT"
@@ -1033,6 +1044,171 @@ function seedSpecStartupSandboxVariant(root: string) {
   writeFileSync(path.join(root, "docs", "domain", "web.md"), "# Web\nSPEC-WEB-DISTRACTOR\n", "utf-8")
 }
 
+function seedCanonReviewPatternSandboxVariant(root: string, optional: boolean) {
+  const modelDir = path.join(root, "src", "main", "kotlin", "sample", "model")
+  const testDir = path.join(root, "src", "test", "kotlin", "sample")
+  const featureDir = path.join(root, "docs", "specs", "feature-x")
+  const taskDir = path.join(featureDir, "state", "tasks", "task-1")
+  const outputPath = path.join(modelDir, "AccountOutput.kt")
+  const skillDir = path.join(root, ".opencode", "skills", "j.output-model-writing")
+  mkdirSync(modelDir, { recursive: true })
+  mkdirSync(testDir, { recursive: true })
+  mkdirSync(taskDir, { recursive: true })
+  mkdirSync(skillDir, { recursive: true })
+
+  const skillMapPath = path.join(root, ".opencode", "skill-map.json")
+  const skillMap = JSON.parse(readFileSync(skillMapPath, "utf-8")) as Array<{ pattern: string; skill: string }>
+  skillMap.push({ pattern: "src/main/kotlin/sample/model/.*Output\\.kt$", skill: "j.output-model-writing" })
+  writeFileSync(skillMapPath, JSON.stringify(skillMap, null, 2) + "\n", "utf-8")
+  writeFileSync(
+    path.join(skillDir, "SKILL.md"),
+    [
+      "---",
+      "name: j.output-model-writing",
+      "description: Write output models with explicit required constructor contracts and optional-only defaults.",
+      "---",
+      "",
+      "# Output Model Writing",
+      "",
+      "## Required Steps",
+      "- Keep mandatory output properties non-null and explicit; constructor defaults are reserved for genuinely optional properties.",
+      "- When adding a required property, update every direct constructor caller rather than weakening the output contract.",
+      "",
+      "## Anti-patterns to avoid",
+      "- Adding a convenience default solely to make unchanged callers compile.",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+  writeFileSync(
+    outputPath,
+    [
+      "package sample.model",
+      "",
+      "data class AccountOutput(",
+      "    val id: String,",
+      "    val accountId: String,",
+      "    val status: String,",
+      ")",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+  writeFileSync(path.join(modelDir, "Preferences.kt"), "package sample.model\n\ndata class Preferences(val enabled: Boolean = false)\n", "utf-8")
+  writeFileSync(
+    path.join(testDir, "AccountOutputTest.kt"),
+    "package sample\n\nimport sample.model.AccountOutput\n\nval output = AccountOutput(id = \"id\", accountId = \"account\", status = \"ACTIVE\")\n",
+    "utf-8"
+  )
+  writeFileSync(path.join(featureDir, "spec.md"), "# Account Output Spec\n\nThe output gains one contract field.\n", "utf-8")
+  writeFileSync(
+    path.join(featureDir, "CONTEXT.md"),
+    optional
+      ? "# Context\n\n`note` is optional metadata and omission must remain valid.\n"
+      : "# Context\n\n`preferences` is required output state and callers must provide it explicitly.\n",
+    "utf-8"
+  )
+  writeFileSync(
+    path.join(featureDir, "plan.md"),
+    [
+      "# Plan: Account Output",
+      "",
+      "## Task 1 — Update AccountOutput",
+      "- **Project**: sandbox",
+      "- **Wave**: 1",
+      "- **Agent**: `j.implementer`",
+      "- **Depends**: None",
+      "- **Skills**: `j.output-model-writing`",
+      "",
+      "### Context References",
+      "- `CONTEXT.md` — field contract.",
+      "",
+      "### Files",
+      "- `src/main/kotlin/sample/model/AccountOutput.kt`",
+      "",
+      "### Action",
+      optional
+        ? "- Add nullable `AccountOutput.note: String? = null`; omission is explicitly part of this optional contract. Preserve the candidate-parent constructor shape otherwise."
+        : "- Add required non-null `AccountOutput.preferences`; follow the candidate-parent explicit-constructor pattern and update every direct caller instead of adding a compatibility default.",
+      "",
+      "### Verification",
+      "- Inspect constructor callers.",
+      "",
+      "### Done Criteria",
+      optional
+        ? "- Optional note may be omitted without weakening required properties."
+        : "- Required preferences is explicit at every constructor call.",
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+  writeFileSync(
+    path.join(root, ".opencode", "state", "active-plan.json"),
+    JSON.stringify(
+      {
+        slug: "feature-x",
+        writeTargets: [{
+          project: "sandbox",
+          targetRepoRoot: root,
+          planPath: path.join(featureDir, "plan.md"),
+          specPath: path.join(featureDir, "spec.md"),
+          contextPath: path.join(featureDir, "CONTEXT.md"),
+        }],
+      },
+      null,
+      2
+    ) + "\n",
+    "utf-8"
+  )
+  writeFileSync(
+    path.join(root, "juninho-config.json"),
+    JSON.stringify({ workflow: { implement: { singleTaskMode: true } } }, null, 2) + "\n",
+    "utf-8"
+  )
+  spawnSync("git", ["add", "."], { cwd: root, stdio: "ignore" })
+  spawnSync("git", ["commit", "-m", "seed account output pattern"], { cwd: root, stdio: "ignore" })
+
+  const before = readFileSync(outputPath, "utf-8")
+  const property = optional ? "    val note: String? = null," : "    val preferences: Preferences = Preferences(),"
+  writeFileSync(outputPath, before.replace("    val status: String,", `    val status: String,\n${property}`), "utf-8")
+  spawnSync("git", ["add", "src/main/kotlin/sample/model/AccountOutput.kt"], { cwd: root, stdio: "ignore" })
+  spawnSync("git", ["commit", "-m", optional ? "feat: add optional note" : "feat: add required preferences default"], {
+    cwd: root,
+    stdio: "ignore",
+  })
+  const commit = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf-8" }).stdout.trim()
+  // The candidate task is COMPLETE with its commit in the manifest; the independent
+  // j.canon-reviewer resolves and reviews that commit and writes canon-review.json itself.
+  writeFileSync(
+    path.join(featureDir, "state", "integration-state.json"),
+    JSON.stringify({ slug: "feature-x", tasks: { "1": { validatedCommit: commit } } }, null, 2) + "\n",
+    "utf-8"
+  )
+  writeFileSync(
+    path.join(taskDir, "execution-state.md"),
+    [
+      "# Task 1 — Execution State",
+      "",
+      "- **Status**: COMPLETE",
+      "- **Feature slug**: feature-x",
+      "- **Wave**: 1",
+      "- **Attempt**: 1",
+      "- **Branch**: main",
+      `- **Candidate Commit**: ${commit}`,
+      "",
+    ].join("\n"),
+    "utf-8"
+  )
+}
+
+function seedCanonReviewRequiredDefaultSandboxVariant(root: string) {
+  seedCanonReviewPatternSandboxVariant(root, false)
+}
+
+function seedCanonReviewOptionalDefaultSandboxVariant(root: string) {
+  seedCanonReviewPatternSandboxVariant(root, true)
+}
+
 const SANDBOX_VARIANT_SEEDERS: Record<number, (root: string) => void> = {
   10: seedMixedDomainSandboxVariant,
   11: seedDualDomainSandboxVariant,
@@ -1043,6 +1219,8 @@ const SANDBOX_VARIANT_SEEDERS: Record<number, (root: string) => void> = {
   16: seedCheckerStartupSandboxVariant,
   17: seedPlannerStartupSandboxVariant,
   18: seedSpecStartupSandboxVariant,
+  20: seedCanonReviewRequiredDefaultSandboxVariant,
+  21: seedCanonReviewOptionalDefaultSandboxVariant,
 }
 
 function seedHarnessSandboxForTask(root: string, index: number) {
@@ -1530,6 +1708,52 @@ function postCheck(result: EvalResult, index: number): string | null {
     const comparison = compareMapperWithAndWithoutSkill()
     if (comparison) return comparison
     return result.actualAnswer.includes("mapper-guidance=used") ? null : "mapper guidance outcome missing"
+  }
+
+  if (index === 20 || index === 21) {
+    if (!result.toolMetrics.task || result.toolMetrics.task.count < 1) return "expected task tool usage"
+    const descendants = exportDescendantSessions(events)
+    const reviewers = descendants.filter((session) => exportedSessionAgent(session) === "j.canon-reviewer")
+    if (reviewers.length === 0) return "behavioral review did not invoke j.canon-reviewer"
+
+    const taskDir = path.join(result.sandboxPath, "docs", "specs", "feature-x", "state", "tasks", "task-1")
+    const reviewPath = path.join(taskDir, "canon-review.json")
+    if (!existsSync(reviewPath)) return "canon-review.json is missing"
+    const review = JSON.parse(readFileSync(reviewPath, "utf-8")) as any
+
+    // Deterministic cross-check on the fixture candidate commit, independent of the reviewer:
+    // rebuild coverage from the exact commit recorded in the (reviewer-immutable) execution-state.
+    const execState = readFileSync(path.join(taskDir, "execution-state.md"), "utf-8")
+    const candidateCommit = execState.match(/Candidate Commit\*\*:\s*([0-9a-f]{7,40})/i)?.[1]
+    if (!candidateCommit) return "fixture did not record the candidate commit"
+    const outputPath = path.join(result.sandboxPath, "src", "main", "kotlin", "sample", "model", "AccountOutput.kt")
+    const coverage = buildCanonAuditCoverage(result.sandboxPath, candidateCommit, [outputPath], {
+      planPath: path.join(result.sandboxPath, "docs", "specs", "feature-x", "plan.md"),
+      taskId: "1",
+    })
+    const file = coverage.files.find((entry) => String(entry.path).endsWith("AccountOutput.kt"))
+    if (!file) return "coverage omitted AccountOutput.kt"
+
+    if (index === 20) {
+      if (!result.actualAnswer.includes("canon-review-required-default=fail")) return "required-default review outcome missing"
+      if (String(review.verdict).toUpperCase() !== "FAIL") return `required-default canon-review recorded ${review.verdict}, expected FAIL`
+      // The detector must at least FLAG the required non-null default divergence, so the
+      // reviewer had the signal available (even though the shallow contract regex spuriously
+      // authorizes it, leaving the semantic FAIL judgement to the independent reviewer).
+      if (file.structuralFindings.length !== 1) return "detector did not flag the required non-null default divergence"
+      const reasons = JSON.stringify(review.reasons ?? [])
+      if (!/AccountOutput|preferences/i.test(reasons) || !/default|caller/i.test(reasons)) {
+        return "canon-review reasons do not name the output default/caller deviation"
+      }
+      return null
+    }
+
+    if (!result.actualAnswer.includes("canon-review-optional-default=pass")) return "optional-default review outcome missing"
+    if (String(review.verdict).toUpperCase() !== "PASS") return `optional-default canon-review recorded ${review.verdict}, expected PASS`
+    if (file.structuralFindings.length !== 0) return "nullable optional default produced a false structural finding"
+    const mechanical = canonAuditVerdict(coverage)
+    if (mechanical.verdict !== "PASS") return `optional-default mechanical verdict was ${mechanical.verdict}, expected PASS`
+    return null
   }
 
   return null

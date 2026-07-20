@@ -4,7 +4,15 @@
     "skill": "j.agents-md-writing"
   },
   {
-    "pattern": "(^|\\/)\\.opencode\\/skills\\/[^/]+\\/SKILL\\.md$|(^|\\/)\\.opencode\\/skill-map\\.json$|(^|\\/)\\.opencode\\/evals\\/.*(skill|behavioral).*(\\.xml|\\.json|\\.md|\\.ts)$",
+    "pattern": "\\.(test|spec)\\.(ts|tsx|js|jsx)$",
+    "skill": "j.frontend-test-writing"
+  },
+  {
+    "pattern": "(^|/)test_[^/]+\\.py$|(^|/)[^/]+_test\\.py$",
+    "skill": "j.python-test-writing"
+  },
+  {
+    "pattern": "(^|\\/)(\\.opencode|contexts/(?:[^/]+/)*\\.context)\\/(skills\\/[^/]+\\/SKILL\\.md|skill-map\\.json)|(^|\\/)\\.opencode\\/evals\\/.*(skill|behavioral).*(\\.xml|\\.json|\\.md|\\.ts)$",
     "skill": "skill-creator"
   },
   {

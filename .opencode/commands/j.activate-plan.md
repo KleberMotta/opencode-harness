@@ -12,8 +12,8 @@ Update the active plan pointer using an explicit repository path or plan path.
 ## Examples
 
 ```
-/j.activate-plan /Users/kleber.motta/repos/olxbr/trp-seller-api
-/j.activate-plan /Users/kleber.motta/repos/olxbr/trp-seller-api/docs/specs/seller-entity/plan.md
+/j.activate-plan /Users/kleber.motta/repos/contexts/trp/trp-seller-api
+/j.activate-plan /Users/kleber.motta/repos/contexts/trp/trp-seller-api/docs/specs/seller-entity/plan.md
 ```
 
 ## What happens

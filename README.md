@@ -1,6 +1,6 @@
 # Workspace `~/repos` — harness Juninho sobre opencode
 
-Este repositório raiz é um **workspace**, não um produto. Ele versiona só a infraestrutura do agente: o harness em `.opencode/`, o contrato global `AGENTS.md`, o `juninho-config.json` e um CLI utilitário no `package.json`. Cada projeto real (`olxbr/trp-seller-api`, `olxbr/trp-financial-api`, …) vive numa subpasta com seu próprio git remoto e **não** é versionado aqui — o `.gitignore` usa allowlist (`/*` ignora tudo; as linhas `!` re-incluem o que é do harness).
+Este repositório raiz é um **workspace**, não um produto. Ele versiona o harness; produtos vivem com Git próprio sob a árvore `contexts/`, ao lado de `.context/` versionados pelo repositório `contexts`.
 
 O **harness Juninho** é uma camada de orquestração sobre o [opencode](https://opencode.ai) que transforma "chat com tools" num fluxo spec-driven. A tese tem quatro partes. **O agente principal nunca implementa**: ele delega para subagentes com responsabilidade única, cada um começando com contexto limpo. **O estado mora em disco**, não na janela de contexto — `docs/specs/{slug}/state/` sobrevive a compactação, reinício de sessão e ao próprio modelo. **Os gates são determinísticos**: quem decide se o código passa são shell scripts (`check-all.sh`, `pre-commit.sh`) e sensores em arquivo, nunca a confiança do modelo. **Os padrões vêm do contexto**: skills medidas do canon do time chegam por dois caminhos — por pattern de arquivo, no instante em que o agente toca o arquivo, e por declaração da própria task no plano, antes de ela escrever a primeira linha.
 
@@ -32,13 +32,13 @@ Rode `bun run setup` sempre que quiser reconferir. O que cada check significa:
 | `provider autenticado` | `~/.local/share/opencode/auth.json` tem ao menos um provider | `opencode auth login` (github-copilot) |
 | `pre-commit hook` | por repo-alvo do plano ativo: `.git/hooks/pre-commit` existe e o symlink não está pendurado | `bun run hooks:install -- --repo <path-do-repo>` |
 | `docker rodando` | `docker info` responde | suba o Docker — repos Spring precisam de containers para os testes de integração (o `/j.check` tenta subir sozinho via `make dependencies`) |
-| `contexto ok em {ctx}/agent-context` | o contexto tem `.git`, `skills/` e `knowledge/` | crie o que faltar |
+| `contexto ok em contexts/{ctx}` | o contexto tem `skills/` e `knowledge/` | crie o que faltar |
 | `references materializadas` | algum contexto tem `references.json` e o `opencode.json` tem o bloco `references` | `bun run sync` |
 
 Sem plano ativo, o check de hooks vira um aviso — instale o hook em cada repo-alvo antes do primeiro `/j.implement`:
 
 ```bash
-bun run hooks:install -- --repo /Users/kleber.motta/repos/olxbr/trp-seller-api
+bun run hooks:install -- --repo /Users/kleber.motta/repos/contexts/trp/trp-seller-api
 ```
 
 Isso gera `scripts/pre-commit.sh` **dentro** do repo-alvo (stack-aware, commitável) e instala o symlink `.git/hooks/pre-commit → ../../scripts/pre-commit.sh` (local, não versionado). O `@j.implementer` verifica que o hook existe antes de commitar e falha com instruções se não existir. É idempotente — pode re-rodar.
@@ -53,13 +53,13 @@ Tudo abaixo roda dentro do TUI do opencode (`opencode` a partir de `~/repos`), e
 
 ### 0. (Opcional) Rascunhe na knowledge base
 
-Se a feature ainda é ideia, escreva um draft em `olxbr/agent-context/knowledge/drafts/` (parta de `drafts/TEMPLATE.md`). Trade-offs e alternativas discutidos ali viram respostas de entrevista no próximo passo — menos perguntas para você. Draft é **intenção, nunca fato** (ver [Knowledge base](#knowledge-base-okf)).
+Se a feature ainda é ideia, escreva um draft no `.context/knowledge/drafts/` herdado mais próximo (TRP: `contexts/trp/.context/knowledge/drafts/`). Draft é **intenção, nunca fato**.
 
 ### 1. `/j.spec <feature>` — entrevista de descoberta
 
 ```
 /j.spec reprocessar validação de identidade de seller recusada por qualidade de imagem
-/j.spec --from olxbr/agent-context/knowledge/drafts/seller-identity-retry.md
+/j.spec --from contexts/trp/.context/knowledge/drafts/seller-identity-retry.md
 ```
 
 Delega para `@j.spec-writer`, que primeiro spawna `@j.explore` para pré-pesquisa no código e depois conduz uma entrevista de 5 fases (Discovery → Requirements → Contract → Data → Review). Classifica os repos em **write targets** (onde o código muda) e **reference projects** (leitura só).
@@ -92,7 +92,7 @@ Delega para `@j.planner`, que roda Metis (classifica intent, spawna `@j.explore`
   "specPath": "docs/specs/seller-identity-retry/spec.md",
   "contextPath": "docs/specs/seller-identity-retry/CONTEXT.md",
   "writeTargets": [
-    { "project": "olxbr/trp-seller-api", "targetRepoRoot": "/Users/kleber.motta/repos/olxbr/trp-seller-api" }
+    { "project": "trp-seller-api", "targetRepoRoot": "/Users/kleber.motta/repos/contexts/trp/trp-seller-api" }
   ],
   "referenceProjects": [
     { "project": "olxbr/trp-financial-api", "reason": "Canon de teste/client; somente leitura." }
@@ -124,7 +124,7 @@ Task cirúrgica, quando você quer só uma:
 
 ```
 /j.implement-task seller-identity-retry/task3
-/j.implement-task olxbr/trp-seller-api:seller-identity-retry/task3
+/j.implement-task trp-seller-api:seller-identity-retry/task3
 ```
 
 Se o `{project}` for omitido e a task existir em múltiplos write targets, o orchestrator **para e pergunta** — nunca chuta.
@@ -181,7 +181,7 @@ Feature: reprocessar validação de identidade de seller recusada por qualidade 
 # shell, uma vez
 cd ~/repos
 bun run setup                                                   # tudo ✓?
-bun run hooks:install -- --repo ~/repos/olxbr/trp-seller-api    # hook no repo-alvo
+bun run hooks:install -- --repo ~/repos/contexts/trp/trp-seller-api
 opencode                                                        # abre o TUI
 ```
 
@@ -194,7 +194,7 @@ opencode                                                        # abre o TUI
 /j.plan implementar o reprocessamento conforme a spec de seller-identity-retry
     → entrevista + review; você aprova
     → docs/specs/seller-identity-retry/plan.md  (ex.: 5 tasks, task5 com Agent: j.validator)
-    → .opencode/state/active-plan.json  (writeTargets: [olxbr/trp-seller-api])
+    → .opencode/state/active-plan.json  (writeTargets: [trp-seller-api])
 
 /j.implement    → task1 COMPLETE · commit a1b2c3d em feature/seller-identity-retry · próxima: task2 · 1/5
                   [você revisa o diff]
@@ -286,32 +286,33 @@ bun run state:clear-task -- seller-identity-retry task-3     # zera o state de u
 ### O plano ativo está errado / apontando para outra feature
 
 ```
-/j.activate-plan /Users/kleber.motta/repos/olxbr/trp-seller-api/docs/specs/{slug}/plan.md
+/j.activate-plan /Users/kleber.motta/repos/contexts/trp/trp-seller-api/docs/specs/{slug}/plan.md
 ```
 ```bash
-bun run plan:activate -- olxbr/trp-seller-api seller-identity-retry
+bun run plan:activate -- contexts/trp/trp-seller-api seller-identity-retry
 bun run plan:clear
 ```
 
 ---
 
-## Contexto olxbr — como os padrões são garantidos
+## Contextos hierárquicos — como os padrões são garantidos
 
-Pastas de 1º nível são **contextos**: agrupam repos que compartilham convenções, vocabulário e conhecimento. O contexto `olxbr` carrega seus ativos em `olxbr/agent-context/` (repo git próprio) e cobre `trp-seller-api`, `trp-financial-api`, `trp-partner-api`, `trp-nupay-api`, `pgw-*`, `wallet*`, `usermod-anti-fraud`.
+Qualquer pasta agrupadora sob `contexts/` pode conter `.context/` e repos irmãos. Um repo herda o `.context` mais próximo e todos os ancestrais. Assim, `contexts/olxbr/.context` pode definir canon organizacional opcional e `contexts/olxbr/trp/.context` especializá-lo para o time.
 
-**Precedência em toda a cadeia: projeto > contexto > workspace.** O `AGENTS.md` do repo vence o do contexto, que vence o global; idem para skills e skill-map.
+**Precedência: evidência e padrões do repo > `.context` mais próximo > `.context` ancestrais > workspace.** Divergência pequena segue canon; divergência forte exige esclarecimento e documentação local no repo.
 
 A cadeia que faz o código sair no padrão, do mais suave ao mais duro:
 
 | Elo | Onde | O que garante |
 |---|---|---|
-| **Skills medidas** | `olxbr/agent-context/skills/` (17) | como escrever cada tipo de arquivo. Skills maduras têm 3 camadas: `SKILL.md` (processo), `SYSTEM.md` (spec do output — **vence o SKILL.md em conflito**), `GOTCHAS.md` (memória de falhas). Medidas do **canon = `trp-financial-api`** |
-| **skill-map por pattern** | `olxbr/agent-context/skill-map.json` | pattern de path → skill. O plugin `j.skill-inject` injeta a `SKILL.md` no instante em que o arquivo é lido/escrito — modelo *push*, não depende do agente lembrar de carregar |
-| **AGENTS.md do contexto** | `olxbr/agent-context/AGENTS.md` | as regras que nenhum pattern captura: canon = trp-financial-api; JUnit5 + Mockito-Kotlin + `@MockitoBean` (nunca MockK, nunca `@MockBean`); thin controllers; 1 commit por task; estados/eventos são contrato (só mudam com decisão registrada) |
+| **Skills medidas** | `.context/skills/` | como escrever cada tipo de arquivo e tecnologia. Skills maduras têm `SKILL.md`, `SYSTEM.md` e `GOTCHAS.md` |
+| **skill-map por pattern** | `.context/skill-map.json` | pattern de path → skill, com nearest `.context` vencendo ancestrais |
+| **AGENTS.md do contexto** | `.context/AGENTS.md` | regras transversais herdadas |
 | **AGENTS.md hierárquicos** | `~/repos/AGENTS.md` → `{repo}/AGENTS.md` → `{repo}/src/.../AGENTS.md` | o plugin `j.directory-agents-injector` empilha do root até a pasta do arquivo, a cada Read |
-| **references** | `olxbr/agent-context/references.json` | `olxbr-test-canon` → `../trp-financial-api` (estilo canônico de teste/client) e `olxbr-knowledge` → `./knowledge`. O `bun run sync` materializa no `opencode.json` |
+| **references** | `.context/references.json` | references materializadas recursivamente por `bun run sync` |
 | **ktfmt/spotless no pre-commit** | hook gerado nos repos-alvo | com `workflow.implement.autoFixFormatOnCommit` (default **`true`**), o hook roda `spotless:apply` nos arquivos staged (ktfmt) antes do commit; o `lint-structure.sh` roda `spotless:check` quando o `pom.xml` tem o `spotless-maven-plugin`. Arquivos **parcialmente staged** são pulados pelo autofix — o hook avisa, e o CI pode reprovar |
-| **detekt custom** | `olxbr/agent-context/lint-rules/` | regras do time mecanizadas (prosa de skill → gate de lint). Hoje: `NoMockBean` (bloqueia `@MockBean` deprecado) |
+| **detekt custom** | `.context/lint-rules/` | o nearest contexto com lint-rules fornece o gate |
+| **autoImprove** | `workflow.implement.autoImprove` | após cada task commit, `j.auto-improver` compara o diff com padrões locais/canon, atualiza e commita contexto quando necessário, ou reabre a mesma task para amend |
 | **validator / reviewer** | tasks `Agent: j.validator` no plano; `@j.reviewer` no `/j.check` | validação semântica contra a spec e review multi-pass |
 
 ### Atenção: o detekt custom está inativo nesta máquina
@@ -320,7 +321,7 @@ O `lint-structure.sh` só roda o detekt quando **três** condições valem ao me
 
 ```bash
 brew install detekt                            # CLI no PATH
-cd ~/repos/olxbr/agent-context/lint-rules
+cd ~/repos/contexts/trp/.context/lint-rules
 gradle build && cp build/libs/rules.jar ./rules.jar
 ```
 
@@ -329,8 +330,8 @@ gradle build && cp build/libs/rules.jar ./rules.jar
 **Auditar cobertura de skill num repo** (mecânico — usa a mesma resolução que o plugin faz em runtime, então os números são os que o agente realmente recebe):
 
 ```bash
-bun run skills:coverage -- --repo ~/repos/olxbr/trp-seller-api
-bun run skills:coverage -- --repo ~/repos/olxbr/trp-seller-api --json
+bun run skills:coverage -- --repo ~/repos/contexts/trp/trp-seller-api
+bun run skills:coverage -- --repo ~/repos/contexts/trp/trp-seller-api --json
 ```
 
 Ele lista os arquivos `.kt`/`.java` que casam com algum pattern, os que o agente escreveria **às cegas**, e os clusters sem cobertura — a fila de trabalho para skills novas.
@@ -350,7 +351,7 @@ Governado: **1 falha observada → 1 mudança mínima em 1 superfície** (agente
 
 ## Knowledge base (OKF)
 
-`olxbr/agent-context/knowledge/` é a base de conhecimento de negócio no formato **OKF** (markdown + frontmatter YAML). A regra de leitura vale para **todo** agente:
+`.context/knowledge/` é a base de conhecimento de negócio no formato **OKF** (markdown + frontmatter YAML). A regra de leitura vale para **todo** agente:
 
 | Pasta | `status` | Significa |
 |---|---|---|
@@ -365,7 +366,7 @@ Estrutura: `index.md` (índice curado), `log.md` (log de promoções/revisões),
 **Como vira spec:**
 
 ```
-/j.spec --from olxbr/agent-context/knowledge/drafts/seller-identity-retry.md
+/j.spec --from contexts/trp/.context/knowledge/drafts/seller-identity-retry.md
 ```
 
 O `@j.spec-writer` lê o draft, trata os trade-offs já discutidos como respostas de entrevista (menos perguntas) e **cita o conceito de origem** no `CONTEXT.md`. `/j.plan` e `/j.implement` seguem normalmente — a spec carrega a intenção do draft como **trabalho novo**, nunca como fato.
@@ -460,6 +461,7 @@ Fonte da verdade: `DEFAULT_CONFIG` em `.opencode/lib/j.juninho-config.ts`. O arq
 | `watchdogSessionStale` | `true` | **`false`** | Monitora sessões de child implementer; pode disparar 1 retry |
 | `refreshExecutionHeartbeat` | `false` | = | Reescreve periodicamente o `execution-state.md` para sinalizar vida |
 | `singleTaskMode` | `false` | **`true`** | 1 task por invocação do `/j.implement`, com report e parada |
+| `autoImprove` | `false` | **`true`** | Audita cada commit de task contra canon/local patterns; canon vai para `contexts`, harness fica sem commit e código volta por amend quando necessário |
 
 **`workflow.unify`**
 
@@ -516,15 +518,17 @@ Modelos (`models.strong/medium/weak`) vivem no mesmo arquivo e são materializad
 ├── docs/
 │   ├── specs/{slug}/        # spec.md, CONTEXT.md, plan.md, state/**  (GITIGNORED)
 │   ├── domain/ · principles/ · harness-changes/ · reports/
-├── olxbr/                   # CONTEXTO (repos com git próprio, não versionados aqui)
-│   └── agent-context/       # AGENTS.md, skills/, skill-map.json, lint-rules/,
-│                            # references.json, knowledge/  (repo git próprio)
+├── contexts/                # repo Git dos .context; produtos são ignorados
+│   └── trp/
+│       ├── .context/        # AGENTS, skills, knowledge, lint-rules
+│       ├── trp-seller-api/  # Git de produto
+│       └── trp-financial-api/
 └── tmp/                     # rascunhos descartáveis
 ```
 
 **Estado global** (`.opencode/state/`, não versionado): `active-plan.json` (ponteiro do plano ativo), `execution-state.md` (resumo de sessão), `persistent-context.md` (memória de longo prazo, atualizada pelo unify).
 
-**Estado por feature** (`docs/specs/{slug}/state/`, no workspace root — e **gitignored** aqui): `implementer-work.md` (log append-only), `check-review.md`, `check-all-output.txt`, `functional-validation-plan.md`, `integration-state.json` (manifesto task → commit validado), `loop-state.json`, `metrics.jsonl`, `tasks/task-{id}/{execution-state.md,validator-work.md,retry-state.json,runtime.json}`, `sessions/{sessionID}-runtime.json`.
+**Estado por feature** (`docs/specs/{slug}/state/`, no workspace root — e **gitignored** aqui): `implementer-work.md` (log append-only), `check-review.md`, `check-all-output.txt`, `functional-validation-plan.md`, `integration-state.json` (manifesto task → commit validado), `loop-state.json`, `metrics.jsonl`, `tasks/task-{id}/{execution-state.md,validator-work.md,retry-state.json,runtime.json,auto-improve-*}`, `sessions/{sessionID}-runtime.json`.
 
 ### Agentes
 
@@ -536,6 +540,7 @@ Modelos (`models.strong/medium/weak`) vivem no mesmo arquivo e são materializad
 | `@j.librarian` | Research read-only em docs externas. Spawn pelo planner (Phase 1) |
 | `@j.plan-reviewer` | Gate de executabilidade do plano (approval bias, ≤3 issues). Interno ao planner |
 | `@j.implementer` | READ→ACT→COMMIT, 1 commit/task em `feature/{slug}`. Não auto-valida |
+| `@j.auto-improver` | Gate opcional pós-commit: audita canon/padrões, commita contexto, deixa harness sem commit e exige amend da mesma task quando necessário |
 | `@j.validator` | Juiz semântico: lê a spec **antes** do código. BLOCK/FIX/NOTE/APPROVED; corrige FIX-tier direto. Só via task `Agent: j.validator` |
 | `@j.test-writer` | Escreve/conserta **apenas** testes nas convenções da org. Nunca toca produção — reporta bugs. Só via task `Agent: j.test-writer` |
 | `@j.checker` | Orquestra o `check-all.sh` + delega review; escreve o `check-review.md` |
@@ -553,8 +558,10 @@ Modelos (`models.strong/medium/weak`) vivem no mesmo arquivo e são materializad
 | `j.auto-format` | Write/Edit | prettier/black/gofmt/rustfmt conforme extensão |
 | `j.plan-autoload` | chat.message + compaction + Read | Injeta o plano ativo nas child sessions (só a seção `## Task {id}` quando a sessão é task-scoped) **e** a `SKILL.md` de cada skill declarada na linha `- **Skills**:` da task |
 | `j.carl-inject` | Read + compaction | Injeta princípios + domain docs por content match |
-| `j.skill-inject` | Read/Write | Injeta a `SKILL.md` quando o path casa o skill-map (precedência projeto > contexto > workspace) |
+| `j.skill-inject` | Read/Write | Injeta skill local, nearest `.context`, contextos ancestrais e workspace |
 | `j.task-runtime` | Task spawn + session created | Persiste runtime/lease/heartbeat |
+| `j.auto-improve` | task completion | Agenda auditoria de canon por task quando `autoImprove` está ativo |
+| `j.auto-improve-guard` | Write/Edit | Impede o auditor de editar código de produto diretamente |
 | `j.task-board` | tool.after + compaction | Board por task no state da feature |
 | `j.intent-gate` | Write/Edit | Warning (ou bloqueio, se `enforcePlanScope`) fora do escopo do plano |
 | `j.todo-enforcer` | Write/Edit + compaction | Re-injeta tasks pendentes |
@@ -573,8 +580,8 @@ Helpers compartilhados em `.opencode/lib/`: `j.juninho-config`, `j.skill-map`, `
 
 Skills são pacotes de conhecimento **dirigidos por pattern de arquivo**: quando você lê/escreve um arquivo cujo path casa uma entrada do skill-map, a `SKILL.md` correspondente é injetada. Cada uma traz quando aplicar, regras canônicas, exemplos do código real, anti-padrões e checklist.
 
-- **Contexto olxbr** (`olxbr/agent-context/skills/`, 17): `j.controller-writing`, `j.service-writing`, `j.repository-writing`, `j.entity-writing`, `j.dto-writing`, `j.mapper-writing`, `j.model-writing`, `j.exception-writing`, `j.configuration-writing`, `j.listener-writing`, `j.utility-writing`, `j.client-writing`, `j.api-client-writing`, `j.seller-domain-model-writing`, `j.migration-writing`, `j.test-writing`, `j.python-script-writing`
-- **Workspace** (`.opencode/skills/`): `j.agents-md-writing`, `j.domain-doc-writing`, `j.principle-doc-writing`, `j.planning-artifact-writing`, `j.shell-script-writing`, `skill-creator`
+- **Contexto TRP** (`contexts/trp/.context/skills/`): skills específicas como `j.spring-test-writing`, `j.spring-domain-service-writing`, `j.spring-jpa-entity-writing`, `j.spring-feign-client-writing`, `j.flyway-migration-writing`, `j.kotlin-domain-model-writing` e `j.python-runtime-validation-writing`
+- **Workspace** (`.opencode/skills/`): `j.agents-md-writing`, `j.domain-doc-writing`, `j.principle-doc-writing`, `j.planning-artifact-writing`, `j.shell-script-writing`, `j.auto-improve`, `j.frontend-test-writing`, `j.python-test-writing`, `skill-creator`
 
 > A tool nativa `skill` do opencode (modelo *pull*, o agente decide carregar) só enxerga `.opencode/skills/`. As skills do contexto são garantidas pelo plugin `j.skill-inject` (modelo *push*, por pattern). Os dois mecanismos coexistem. `bun run skills:list` mostra as duas camadas.
 
@@ -594,7 +601,7 @@ Usam os três: `lint-structure.sh`, `test-related.sh`, `build-verify.sh`, `run-t
 
 - **Determinismo sobre estocasticidade.** Cada decisão vive num agente isolado com contrato escrito, gates automatizados e estado persistido. A terminação do loop é por **sensor** (arquivo em disco), nunca por "confiança do modelo": ou o check fica verde e o unify conclui, ou escala para humano com a evidência (`check-review.md` + `check-all-output.txt`). O loop nunca contorna gates — só reentra nos mesmos comandos que você rodaria.
 - **Proteção da janela de contexto.** Child session começa limpa; o orchestrator não acumula leitura por task. Os plugins re-injetam só o necessário e sobrevivem a compactação.
-- **Forward-only.** Task `COMPLETE` não reabre — correção vira follow-up task. Histórico linear, cada commit rastreável até a spec.
+- **Task-local correction.** Com `autoImprove`, uma task só fica `COMPLETE` após auditoria; desvios encontrados antes disso voltam à mesma task e entram via amend. Achados posteriores de `/j.check` continuam forward-only.
 - **Multi-projeto nativo.** Um `plan.md` unificado cobre N write targets + M referências, com estado centralizado e `feature/{slug}` consistente em cada repo.
 - **Skills como documentação executável.** Em vez de doc que ninguém lê, a skill é injetada no instante em que o agente toca o arquivo daquele pattern.
 - **Push + pull nas skills.** O opencode ≥1.17 tem skills nativas (pull, por descrição). O harness mantém o `j.skill-inject` como enforcement push por pattern — a skill certa chega sem depender do agente decidir carregá-la.

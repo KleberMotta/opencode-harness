@@ -26,6 +26,7 @@ Before spawning new research, resolve the feature: derive `{feature-slug}` from 
 - Build your Phase 2 ambiguity ledger from what is *missing* in `spec.md`/`CONTEXT.md`, not from what a fresh feature would need. If both cover the request end to end, the interview may be a single confirmation question or none at all.
 - New exploration should fill gaps and verify stale assumptions, not restart from zero.
 - If no `spec.md` exists for the slug (Path B, plan-driven), proceed with full research and interview as usual.
+- **Revision feedback:** if `docs/specs/{slug}/state/plan-review.md` exists and records verdict **FAIL**, a previous plan was rejected by the independent canon review and archived (see `docs/specs/{slug}/state/plan.rejected-N.md`). You MUST read `plan-review.md` fully before writing the new plan: every point it raises is **blocking**, and the new plan must either resolve it or make the task text explicitly authorize the divergence the reviewer flagged. Do not reproduce the rejected plan's mistakes.
 
 | Intent type | Research strategy |
 |---|---|
@@ -166,7 +167,7 @@ financial-api is a `writeTarget` — not a footnote in the partner-api plan.
 
 **Ambiguity eradication rule**: For anything with even a small chance of misunderstanding, the plan must spell out the chosen interpretation in both `CONTEXT.md` and the task. This includes identifier mappings, header/body/entity/provider field names, request/response ownership, transaction boundaries, error classification, retry semantics, event ownership, queue/topic names, repository query semantics, and tests that must or must not be written. If the planner cannot state the choice confidently from `CONTEXT.md` or code evidence, ask the developer before writing/approving the plan.
 
-**Implementation-pattern binding rule**: Every task that introduces a client, service, repository, controller, DTO, entity, migration, listener, mapper, event, or test must name the canonical pattern/file to follow or explicitly say no local pattern exists. Do not ask implementers to infer patterns from broad directories.
+**Implementation-pattern binding rule**: Every task that introduces or structurally changes a client, service, repository, controller, DTO, entity, migration, listener, mapper, event, or test must bind the exact existing symbol/file at the task base commit as its primary pattern. New constructs must name one same-role local precedent and may name up to two corroborating siblings. The task must state the intended delta from that precedent and list impacted callers for signature/constructor/wire-shape changes. If no local precedent exists, record the exhausted search scope and the chosen context/reference pattern. Never ask implementers to infer patterns from broad directories or silently invent compatibility defaults.
 
 **Local integration validation script rule**: Before planning a new feature-wide validation script, inspect the target repo's `scripts/` directory and read every candidate that already exercises the same endpoint, workflow, or runtime fixture. Record the candidates and coverage gaps in `CONTEXT.md`. If an existing script can cover the feature by being extended, ask the developer whether to update that script or create a separate feature-specific script; do not decide unilaterally. Only plan `scripts/validate_{feature_slug}.py` after the developer explicitly chooses a new script, or when no existing script covers the same endpoint/context. The selected script owns the end-to-end scenarios, accepts runtime configuration through CLI args or environment variables, prints a clear scenario summary, and exits non-zero on failure. The final task is only COMPLETE when the selected script executes successfully.
 
@@ -216,7 +217,7 @@ Required structure:
 - **Wave**: 1
 - **Agent**: j.implementer
 - **Depends**: None
-- **Skills**: j.service-writing,j.test-writing
+- **Skills**: j.spring-domain-service-writing,j.spring-test-writing
 
 ### Context References
 - `CONTEXT.md#{exact-section}` — {decision/fact the implementer must follow}
@@ -268,7 +269,7 @@ Read spec, full CONTEXT, task diffs, and dependency state. Classify each task cr
 - **Wave**: {wave after the implementation tasks it covers}
 - **Agent**: j.test-writer
 - **Depends**: {implementation task ids}
-- **Skills**: j.test-writing
+- **Skills**: j.spring-test-writing
 
 ### Context References
 - `CONTEXT.md#{section}`
@@ -292,7 +293,7 @@ Use a dedicated `j.test-writer` task when the plan concentrates meaningful test-
 - **Wave**: {last wave}
 - **Agent**: j.implementer
 - **Depends**: {all prior tasks}
-- **Skills**: j.python-script-writing
+- **Skills**: j.python-runtime-validation-writing
 
 ### Context References
 - `CONTEXT.md#Goal`
@@ -344,6 +345,10 @@ Minimum task detail:
 - Tasks in later waves depend on earlier waves completing
 - Execution still commits on one shared feature branch, so task commits remain sequential even when multiple tasks share a wave
 - If later `/j.check` findings require more code after a task is already COMPLETE, create a new follow-up task with a new id instead of reopening the completed task
+
+Direct developer feedback during `singleTaskMode` is not a planner concern. Do not create a follow-up task or modify `plan.md`; the implementer must resume the latest completed task and amend its commit.
+
+**Pattern divergence rule:** before choosing an implementation pattern, inspect repository-local evidence (`README.md`, `AGENTS.md`, `CLAUDE.md`, AI rule files, build/command manifests) and sibling code, then nearest and ancestor `.context` canons. Slight isolated divergence defaults to canon. Strong or repeated repository divergence is potentially intentional: ask the developer during planning, record the decision, and plan repository-local skill/AGENTS guidance when approved.
 
 **Validator task placement rule**: The planner is responsible for placing explicit `j.validator` tasks at strategic intervals in the plan. The implementer does NOT auto-invoke the validator after each task. Place validator tasks:
 - After every 2–4 implementation tasks, or at the end of each significant wave

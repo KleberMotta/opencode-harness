@@ -15,7 +15,7 @@ type RuntimeTaskMetadata = {
   featureSlug: string
   taskID: string
   attempt: number
-  stage: "implement" | "validate" | "check-reentry"
+  stage: "implement" | "validate" | "canon-review" | "check-reentry"
   planBranch: string
   planPath: string
   specPath: string
@@ -164,12 +164,13 @@ function extractStructuredString(prompt: string, label: string): string | null {
 function extractTaskID(prompt: string): string | null {
   const explicitTask = extractStructuredString(prompt, "Task")
   if (explicitTask?.match(/^\d+$/)) return explicitTask
-  return prompt.match(/(?:Execute|executing|Validate|validating) task\s+(\d+)\b/i)?.[1] ?? null
+  return prompt.match(/(?:Execute|executing|Validate|validating|Audit|auditing) task\s+(\d+)\b/i)?.[1] ?? null
 }
 
 function extractStage(prompt: string): RuntimeTaskMetadata["stage"] {
   const explicitStage = extractStructuredString(prompt, "Stage")?.toLowerCase()
   if (explicitStage === "validate") return "validate"
+  if (explicitStage === "canon-review") return "canon-review"
   if (explicitStage === "check-reentry") return "check-reentry"
   if (explicitStage === "implement") return "implement"
 
@@ -177,6 +178,7 @@ function extractStage(prompt: string): RuntimeTaskMetadata["stage"] {
   if (/^validate\s+task\b/i.test(firstMeaningfulLine)) return "validate"
   if (/^execute\s+task\b/i.test(firstMeaningfulLine)) return "implement"
   if (/\bvalidate\b|\bvalidator\b/i.test(prompt)) return "validate"
+  if (/^review\s+task\b/i.test(firstMeaningfulLine) || /\bcanon[- ]?review\b|\/j\.review-(task|plan)\b/i.test(prompt)) return "canon-review"
   if (/check-review\.md|check-all-output\.txt|functional-validation-plan\.md/i.test(prompt)) return "check-reentry"
   return "implement"
 }
@@ -241,7 +243,11 @@ function loadTaskContract(directory: string, args: Record<string, unknown>): Tas
       featureSlug: typeof contractArg.featureSlug === "string" ? contractArg.featureSlug : undefined,
       taskID: typeof contractArg.taskID === "string" ? contractArg.taskID : typeof contractArg.taskID === "number" ? String(contractArg.taskID) : undefined,
       attempt: typeof contractArg.attempt === "number" ? contractArg.attempt : undefined,
-      stage: contractArg.stage === "implement" || contractArg.stage === "validate" || contractArg.stage === "check-reentry"
+      stage:
+        contractArg.stage === "implement" ||
+        contractArg.stage === "validate" ||
+        contractArg.stage === "canon-review" ||
+        contractArg.stage === "check-reentry"
         ? contractArg.stage
         : undefined,
       planPath: typeof contractArg.planPath === "string" ? contractArg.planPath : undefined,
@@ -479,12 +485,15 @@ function maybeMarkSupersededExecutionState(filePath: string, attempt: number, re
   writeFileSync(filePath, finalContent, "utf-8")
 }
 
-function isTerminalStatus(status?: string): boolean {
+function isTerminalStatus(status?: string, _stage?: RuntimeTaskMetadata["stage"]): boolean {
   return status === "COMPLETE" || status === "FAILED" || status === "BLOCKED" || status === "SUPERSEDED"
 }
 
 function parseStaleThresholdMs(stage: RuntimeTaskMetadata["stage"], busy: boolean): number {
-  const base = stage === "validate" ? VALIDATE_STALE_MS : IMPLEMENT_STALE_MS
+  const base =
+    stage === "validate" || stage === "canon-review"
+      ? VALIDATE_STALE_MS
+      : IMPLEMENT_STALE_MS
   return busy ? base * BUSY_GRACE_MULTIPLIER : base
 }
 
@@ -543,7 +552,12 @@ async function relaunchAttempt(client: any, metadata: RuntimeTaskMetadata, nextA
     await client.session.promptAsync({
       sessionID: newSessionID,
       directory: metadata.targetRepoRoot,
-      agent: metadata.stage === "validate" ? "j.validator" : "j.implementer",
+      agent:
+        metadata.stage === "validate"
+          ? "j.validator"
+          : metadata.stage === "canon-review"
+            ? "j.canon-reviewer"
+            : "j.implementer",
       parts: [{ type: "text", text: buildRetryPrompt(metadata, nextAttempt, reason) }],
     })
 
@@ -569,7 +583,7 @@ async function maybeRetryTrackedSession(
   const taskState = readExecutionState(statePath)
   const runtimeState = readRuntimeStatus(runtimePath)
   const effectiveStatus = taskState.status ?? runtimeState.status
-  if (isTerminalStatus(effectiveStatus)) {
+  if (isTerminalStatus(effectiveStatus, metadata.stage)) {
     trackedBySession.delete(metadata.ownerSessionID ?? "")
     return
   }
@@ -602,7 +616,12 @@ async function maybeRetryTrackedSession(
   if (!aborted) return
 
   const nextAttempt = metadata.attempt + 1
-  const retryReason = metadata.stage === "validate" ? "stale-validator-session" : "stale-task-session"
+  const retryReason =
+    metadata.stage === "validate"
+      ? "stale-validator-session"
+      : metadata.stage === "canon-review"
+        ? "stale-canon-reviewer-session"
+        : "stale-task-session"
 
   const retriedMetadata: RuntimeTaskMetadata = {
     ...metadata,

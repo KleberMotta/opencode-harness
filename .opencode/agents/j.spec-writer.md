@@ -27,7 +27,7 @@ Initialize `docs/specs/{feature-slug}/state/README.md` from the workspace harnes
 
 ## Knowledge Base Reading Rule (olxbr-knowledge / OKF)
 
-Contexts (first-level workspace folders such as `olxbr/`) keep a knowledge base in `{context}/agent-context/knowledge/`, written in OKF — markdown with `type`/`status`/`tags` frontmatter. Whenever you read ANY knowledge document during research (not only via `--from`), apply the **status rule**:
+Contexts are resolved structurally by walking from a product repository through nearest and ancestor `.context/` directories. Knowledge lives under `.context/knowledge/`, written in OKF — markdown with `type`/`status`/`tags` frontmatter. Whenever you read ANY knowledge document during research (not only via `--from`), apply the **status rule**:
 
 - `status: draft` (files under `knowledge/drafts/`) = **intent that is not implemented** — never treat it as fact, never cite it as current system behavior. Requirements derived from a draft are new work to be specified.
 - `status: consolidated` (files under `knowledge/domains/`) and documents under `knowledge/decisions/` = **implemented truth** — may be cited as existing behavior and used as constraints.
@@ -43,7 +43,7 @@ When the request includes `--from <path>` (or an `@reference` resolving to an OK
 1. Read the referenced document FIRST, before spawning `@j.explore`. Parse its OKF frontmatter (`type`, `status`, `tags`) and apply the status rule above.
 2. Treat trade-offs already weighed, alternatives already discarded, and decisions already recorded in the draft as **answered interview questions**. Do NOT re-ask them — at most confirm in one compact summary ("the draft already decided X over Y because Z — still valid?"). Interview only the points the draft leaves genuinely open.
 3. Feed the draft's problem statement and vocabulary into the `@j.explore` prompt in Phase 0.
-4. `CONTEXT.md` must CITE the origin concept: add the draft to `## Research Findings` (path, title, and its `status` at read time) and to `## Key Files` (`{context}/agent-context/knowledge/drafts/{doc}.md — origin concept for this spec`). Decisions inherited from the draft go into `## Decisions Made` with the draft as the recorded source.
+4. `CONTEXT.md` must CITE the origin concept: add the draft to `## Research Findings` and `## Key Files` using its `.context/knowledge/drafts/{doc}.md` path. Decisions inherited from the draft go into `## Decisions Made` with the draft as source.
 5. Because the source has `status: draft`, everything it proposes is intent: the spec implements that intent but must never present drafted behavior as already existing.
 
 ---

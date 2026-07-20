@@ -169,7 +169,7 @@ Classify EVERY failure (verification failures and Critical/Important review find
 - `TEST_FAILURE` → reentry with a behavioral diagnosis (name the task, the failing test, and the file)
 - `COVERAGE_GAP` → propose a follow-up task with `Agent: j.test-writer` (never reopen a completed task)
 - `INFRA` → instruct `make dependencies` / environment repair; NEVER a code reentry
-- `STYLE_RECURRENT` → same style pattern seen in ≥ 2 features (use prior reports or context-layer notes as evidence): candidate for a detekt rule in the context layer (`lint-rules/`); propose it to the dev
+- `STYLE_RECURRENT` → same style pattern seen in ≥ 2 features (use prior reports or context-layer notes as evidence): candidate for a detekt rule in `contexts/<context>/lint-rules/`; propose it to the dev
 - `UNKNOWN` → escalate to the human
 
 One line per failure:

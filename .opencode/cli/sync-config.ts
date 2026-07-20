@@ -3,8 +3,8 @@
  *
  * Reads opencode.template.json, replaces __STRONG_MODEL__, __MEDIUM_MODEL__,
  * __WEAK_MODEL__ placeholders with values from juninho-config.json, materializes
- * the "references" block from every agent-context/references.json found one
- * level under the workspace root (paths re-resolved to be relative to the
+ * the "references" block from every contexts/<context>/references.json (paths
+ * re-resolved to be relative to the
  * workspace root, where the config file lives), and writes the final
  * opencode.json.
  *
@@ -14,6 +14,7 @@
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "fs"
 import path from "path"
+import { discoverContextRoots } from "../lib/j.workspace-paths"
 
 const root = path.resolve(import.meta.dir, "../..")
 const templatePath = path.join(root, "opencode.template.json")
@@ -36,10 +37,10 @@ function isLocalRelativePath(value: string): boolean {
 }
 
 // References paths in opencode.json are resolved relative to the config file
-// (the workspace root). Entries in an agent-context/references.json are
+// (the workspace root). Entries in contexts/<context>/references.json are
 // relative to that file, so re-anchor them: absolute if outside the workspace,
 // workspace-relative otherwise (ex.: "../trp-financial-api" declared in
-// olxbr/agent-context/ vira "olxbr/trp-financial-api").
+// `.context/references.json` entries are resolved relative to that marker.
 function reanchorPath(referencesDir: string, value: string): string {
   if (!isLocalRelativePath(value)) return value
   const absolute = path.resolve(referencesDir, value)
@@ -65,18 +66,8 @@ function collectReferences(): { references: Record<string, ReferenceEntry>; cont
   const sourceByKey: Record<string, string> = {}
   let contexts = 0
 
-  let workspaceEntries: string[] = []
-  try {
-    workspaceEntries = readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => entry.name)
-      .sort((left, right) => left.localeCompare(right))
-  } catch {
-    return { references, contexts }
-  }
-
-  for (const name of workspaceEntries) {
-    const referencesFile = path.join(root, name, "agent-context", "references.json")
+  for (const contextRoot of discoverContextRoots(root)) {
+    const referencesFile = path.join(contextRoot, "references.json")
     if (!existsSync(referencesFile)) continue
 
     let parsed: Record<string, ReferenceEntry>

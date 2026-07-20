@@ -1,0 +1,18 @@
+{
+  "candidateCommit": "02419ac6bdf4631ffbe1dd30285514233b7e12bf",
+  "file": "contexts/trp/trp-seller-api/src/main/kotlin/br/com/olx/trp/seller/domain/seller/model/SellerOutput.kt",
+  "finding": {
+    "kind": "NON_NULL_DEFAULT_DIVERGENCE",
+    "symbol": "SellerOutput",
+    "property": "preferences",
+    "baseline": "12/12 comparable non-null constructor properties explicit",
+    "contractAuthorization": false
+  },
+  "omittedCallers": [
+    "src/test/kotlin/br/com/olx/trp/seller/domain/seller/model/SellerOutputTest.kt",
+    "src/test/kotlin/br/com/olx/trp/seller/listener/seller/ProviderCreatingListenerTest.kt",
+    "src/test/kotlin/br/com/olx/trp/seller/listener/seller/WalletCreatedListenerTest.kt",
+    "src/test/kotlin/br/com/olx/trp/seller/messaging/MessagingServiceTest.kt"
+  ],
+  "expectedAuditResult": "REOPEN_REQUIRED"
+}

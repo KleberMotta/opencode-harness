@@ -62,14 +62,15 @@
  * Exit codes: 0 = done · 1 = erro de uso/ambiente · 2 = abortado por guarda
  * (precisa de humano).
  */
-import { spawnSync } from "child_process"
+import { execFileSync, spawnSync } from "child_process"
 import { createHash } from "crypto"
-import { existsSync, mkdirSync, readFileSync, statSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from "fs"
 import os from "os"
 import path from "path"
 import { die, ok, writeJson } from "./_lib"
 import { loadJuninhoConfig } from "../lib/j.juninho-config"
-import { featureStateDir, featureStateManifestPath, featureStateTaskPaths } from "../lib/j.feature-state-paths"
+import { featureStateDir, featureStateManifestPath, featureStateTaskPaths, planReviewPath } from "../lib/j.feature-state-paths"
+import { removeTaskFromManifest } from "../lib/j.feature-integration"
 
 type Until = "implement" | "check" | "unify"
 
@@ -88,6 +89,8 @@ type PlanTask = { id: string; name: string; agent: string }
 
 type CheckVerdict = "GREEN" | "BLOCKED" | "UNKNOWN"
 
+type ReviewVerdict = "PASS" | "FAIL" | "UNKNOWN"
+
 type CheckReviewSensor = {
   mtimeMs: number
   verdict: CheckVerdict
@@ -97,18 +100,45 @@ type CheckReviewSensor = {
   infraOnly: boolean
 }
 
+// Per-task canon review file (docs/specs/{slug}/state/tasks/task-{id}/canon-review.json).
+// `stale` = the review predates the task's current completion (execution-state.md mtime),
+// i.e. it reviewed a previous attempt. The anti-forge window (review newer than the driver's
+// own /j.review-task dispatch) is applied in decide(), which owns the loop-state.
+type TaskReviewSensor = {
+  mtimeMs: number
+  verdict: ReviewVerdict
+  commit: string | null
+  stale: boolean
+}
+
+// Plan-level canon review file (docs/specs/{slug}/state/plan-review.json). `fresh` = the
+// review is newer than plan.md, so a plan edited after review re-triggers /j.review-plan.
+type PlanReviewSensor = {
+  mtimeMs: number
+  verdict: ReviewVerdict
+  fresh: boolean
+}
+
 type Sensors = {
+  planExists: boolean
   planTasks: PlanTask[]
   taskStatuses: Record<string, string>
   pendingIds: string[]
   completedIds: string[]
   checkReview: CheckReviewSensor | null
+  planReview: PlanReviewSensor | null
+  taskReviews: Record<string, TaskReviewSensor>
+  taskCommits: Record<string, string | null>
   lastValidatedCommit: string | null
   stateHash: string
 }
 
 type Decision =
-  | { kind: "run"; command: "/j.implement" | "/j.check" | "/j.unify"; because: string; reentry?: boolean; infraRetry?: boolean }
+  | { kind: "run"; command: "/j.implement" | "/j.check" | "/j.unify" | "/j.review-plan" | "/j.review-task" | "/j.plan"; because: string; reentry?: boolean; infraRetry?: boolean; reviewTaskId?: string }
+  | { kind: "undo"; taskId: string; commit: string; because: string }
+  // E6: plano rejeitado pela revisão canônica em modo automation → arquiva plan.md
+  // como plan.rejected-N.md e deixa a próxima iteração re-disparar /j.plan.
+  | { kind: "replan"; because: string }
   | { kind: "done"; because: string }
   | { kind: "abort"; because: string; printRollback?: boolean }
 
@@ -141,6 +171,15 @@ type LoopState = {
   lastFailureReviewMtimeMs: number | null
   // Exceção INFRA: uma única re-execução de /j.check por episódio de ambiente.
   infraRetryUsed: boolean
+  // Desfaz-e-refaz: nº de vezes que cada task foi desfeita por review FAIL. Teto
+  // em workflow.review.maxAttempts → ABORT.
+  reviewRetries: Record<string, number>
+  // Nº de /j.review-plan disparados sem veredito fresco; teto → ABORT.
+  planReviewAttempts: number
+  // Anti-forja: instante (ms) em que o driver disparou /j.review-task para cada
+  // task. Um canon-review.json só é aceito se sua mtime for POSTERIOR — o produtor
+  // não consegue forjar um veredito com mtime futura ao próprio dispatch do driver.
+  reviewDispatchedAt: Record<string, number>
 }
 
 // ---------------------------------------------------------------------------
@@ -332,8 +371,26 @@ function isTaskComplete(status: string | undefined, validatedCommit: unknown): b
   return typeof validatedCommit === "string" && validatedCommit.trim() !== "" && validatedCommit !== "-"
 }
 
+// Reads a canon-review.json / plan-review.json written by @j.canon-reviewer. A
+// missing file is null; a present-but-unparseable file yields an UNKNOWN verdict
+// with its real mtime (so it still counts as "not yet a valid verdict").
+function readReviewFile(filePath: string): { mtimeMs: number; verdict: ReviewVerdict; commit: string | null } | null {
+  if (!existsSync(filePath)) return null
+  const mtimeMs = safeMtimeMs(filePath) ?? 0
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, "utf-8")) as { verdict?: unknown; commit?: unknown }
+    const raw = typeof parsed.verdict === "string" ? parsed.verdict.toUpperCase() : ""
+    const verdict: ReviewVerdict = raw === "PASS" ? "PASS" : raw === "FAIL" ? "FAIL" : "UNKNOWN"
+    const commit = typeof parsed.commit === "string" && parsed.commit.trim() ? parsed.commit.trim() : null
+    return { mtimeMs, verdict, commit }
+  } catch {
+    return { mtimeMs, verdict: "UNKNOWN", commit: null }
+  }
+}
+
 function readSensors(workspace: string, slug: string): Sensors {
   const planPath = path.join(workspace, "docs", "specs", slug, "plan.md")
+  const planExists = existsSync(planPath)
   const planTasks = parsePlanTasks(planPath)
 
   const manifestPath = featureStateManifestPath(workspace, slug)
@@ -351,13 +408,15 @@ function readSensors(workspace: string, slug: string): Sensors {
   const taskStatuses: Record<string, string> = {}
   const pendingIds: string[] = []
   const completedIds: string[] = []
+  const taskReviews: Record<string, TaskReviewSensor> = {}
+  const taskCommits: Record<string, string | null> = {}
   let lastValidatedCommit: string | null = null
   const progressMtimes: number[] = []
   const manifestMtime = safeMtimeMs(manifestPath)
   if (manifestMtime !== null) progressMtimes.push(manifestMtime)
 
   for (const task of planTasks) {
-    const { statePath } = featureStateTaskPaths(workspace, slug, task.id)
+    const { statePath, canonReviewPath } = featureStateTaskPaths(workspace, slug, task.id)
     const stateMtime = safeMtimeMs(statePath)
     if (stateMtime !== null) progressMtimes.push(stateMtime)
 
@@ -366,10 +425,22 @@ function readSensors(workspace: string, slug: string): Sensors {
     taskStatuses[task.id] = status
 
     const validatedCommit = manifestTasks[task.id]?.validatedCommit
+    taskCommits[task.id] = typeof validatedCommit === "string" && validatedCommit.trim() && validatedCommit !== "-" ? validatedCommit : null
     if (isTaskComplete(status, validatedCommit)) completedIds.push(task.id)
     else pendingIds.push(task.id)
-    if (typeof validatedCommit === "string" && validatedCommit.trim() && validatedCommit !== "-") {
-      lastValidatedCommit = validatedCommit
+    if (taskCommits[task.id]) lastValidatedCommit = taskCommits[task.id]
+
+    // Canon review of this task's completion. A review is stale when it predates
+    // the current execution-state.md (it reviewed an earlier attempt); the driver
+    // then treats it as absent and re-dispatches.
+    const review = readReviewFile(canonReviewPath)
+    if (review) {
+      taskReviews[task.id] = {
+        mtimeMs: review.mtimeMs,
+        verdict: review.verdict,
+        commit: review.commit,
+        stale: stateMtime !== null && review.mtimeMs < stateMtime,
+      }
     }
   }
 
@@ -399,19 +470,124 @@ function readSensors(workspace: string, slug: string): Sensors {
     }
   }
 
+  // Plan-level canon review. Fresh when newer than plan.md (a plan edited after
+  // review re-triggers /j.review-plan).
+  const planMtimeMs = safeMtimeMs(planPath)
+  const planReviewRaw = readReviewFile(planReviewPath(workspace, slug))
+  const planReview: PlanReviewSensor | null = planReviewRaw
+    ? {
+        mtimeMs: planReviewRaw.mtimeMs,
+        verdict: planReviewRaw.verdict,
+        fresh: planMtimeMs === null || planReviewRaw.mtimeMs >= planMtimeMs,
+      }
+    : null
+
   const statusFingerprint = planTasks.map((task) => `${task.id}=${taskStatuses[task.id]}`).join(";")
   const stateHash = sha256(manifestRaw + "\n" + statusFingerprint)
 
-  return { planTasks, taskStatuses, pendingIds, completedIds, checkReview, lastValidatedCommit, stateHash }
+  return { planExists, planTasks, taskStatuses, pendingIds, completedIds, checkReview, planReview, taskReviews, taskCommits, lastValidatedCommit, stateHash }
 }
 
 // ---------------------------------------------------------------------------
 // Decisão (pura: sensores + memória do loop → próximo comando)
 // ---------------------------------------------------------------------------
 
-type DecisionOptions = { until: Until; maxCheckReentries: number; unifyEnabled: boolean }
+type DecisionOptions = {
+  until: Until
+  maxCheckReentries: number
+  unifyEnabled: boolean
+  reviewPlan: boolean
+  reviewImplement: boolean
+  reviewMaxAttempts: number
+  // workflow.automation.nonInteractive && workflow.automation.autoApproveArtifacts —
+  // no FAIL da revisão de plano, este flag decide entre replan automático (true)
+  // e ABORT interativo pro humano (false). É o MESMO gate que o planner respeita.
+  automation: boolean
+}
+
+// A task's canon review is ACCEPTED only when it is present, carries a real
+// verdict, is not stale versus the current completion, AND its mtime is later
+// than the driver's own /j.review-task dispatch for that task (anti-forge window:
+// the producer cannot pre-write a verdict with an mtime later than a dispatch the
+// driver had not issued yet). Returns the review when accepted, else null.
+function acceptedTaskReview(sensors: Sensors, loop: LoopState, id: string): TaskReviewSensor | null {
+  const review = sensors.taskReviews[id]
+  if (!review || review.verdict === "UNKNOWN" || review.stale) return null
+  const dispatchedAt = loop.reviewDispatchedAt[id]
+  if (dispatchedAt === undefined || !(review.mtimeMs > dispatchedAt)) return null
+  return review
+}
 
 function decide(sensors: Sensors, loop: LoopState, opts: DecisionOptions): Decision {
+  // --- Plan review: gates before ANY implementation. ---
+  if (opts.reviewPlan) {
+    // E6: um replan de automation anterior arquivou o plano (plan.md sumiu) mas o
+    // feature já foi planejado (plan-review.json presente) → re-dispara /j.plan.
+    // Só em automation: o driver NUNCA replaneja sozinho em modo interativo (isso
+    // abriria um interview sem humano). O planner respeita workflow.automation e
+    // relê plan-review.md como feedback de revisão (agents/j.planner.md).
+    if (opts.automation && !sensors.planExists && sensors.planReview !== null) {
+      return { kind: "run", command: "/j.plan", because: `plano arquivado após revisão canônica FAIL — replanejar (automation)` }
+    }
+    const planReview = sensors.planReview
+    const accepted = planReview !== null && planReview.verdict !== "UNKNOWN" && planReview.fresh
+    if (!accepted) {
+      if (loop.planReviewAttempts >= opts.reviewMaxAttempts) {
+        return { kind: "abort", because: `revisão canônica do plano não produziu veredito fresco após ${loop.planReviewAttempts} tentativa(s) — inspecione docs/specs/${loop.slug}/state/plan-review.md` }
+      }
+      return {
+        kind: "run",
+        command: "/j.review-plan",
+        because: planReview ? "plan-review.json stale vs plan.md — re-revisar o plano" : "sem plan-review.json — revisar o plano antes de implementar",
+      }
+    }
+    if (planReview!.verdict === "FAIL") {
+      // Teto: o plano foi rejeitado reviewMaxAttempts× — para e chama o humano. O
+      // revisor já melhorou canon/harness a cada FAIL; insistir sozinho não converge.
+      // planReviewAttempts conta os dispatches de /j.review-plan (só reseta num PASS
+      // fresco, ver main()), logo persiste através dos ciclos replan→review.
+      if (loop.planReviewAttempts >= opts.reviewMaxAttempts) {
+        return { kind: "abort", because: `revisão canônica do plano FALHOU ${loop.planReviewAttempts}× (teto ${opts.reviewMaxAttempts}) — leia docs/specs/${loop.slug}/state/plan-review.md e refaça o plano manualmente` }
+      }
+      // Automation: arquiva o plano rejeitado e replaneja (side-effect executado em
+      // main(), nunca aqui nem em dry-run). O planner (workflow.automation) lê o
+      // plan-review.md como feedback e escreve um plano novo.
+      if (opts.automation) {
+        return { kind: "replan", because: `revisão canônica do plano FALHOU — arquiva o plano e re-dispara /j.plan (automation, tentativa ${loop.planReviewAttempts + 1}/${opts.reviewMaxAttempts})` }
+      }
+      // Interativo (default): ABORTA SEM arquivar — deixa plan.md no lugar pro humano
+      // revisar (evita o `die` da próxima iteração) e nunca abre interview sozinho.
+      return { kind: "abort", because: `revisão canônica do plano FALHOU — leia docs/specs/${loop.slug}/state/plan-review.md, corrija o plano e rode /j.plan de novo (modo interativo: o driver não arquiva/replaneja o plano sozinho)` }
+    }
+    // PASS → segue.
+  }
+
+  // --- Task review: revisa cada task COMPLETE ANTES de liberar a próxima, para
+  //     garantir que o HEAD ainda seja o commit revisado quando o undo dispara. ---
+  if (opts.reviewImplement) {
+    // FAIL tem prioridade: desfaz-e-refaz (ou teto → ABORT).
+    for (const id of sensors.completedIds) {
+      const review = acceptedTaskReview(sensors, loop, id)
+      if (review && review.verdict === "FAIL") {
+        const retries = loop.reviewRetries[id] ?? 0
+        if (retries >= opts.reviewMaxAttempts) {
+          return { kind: "abort", because: `revisão canônica da task ${id} falhou ${retries}× (teto ${opts.reviewMaxAttempts}) — canon já foi melhorado; inspecione docs/specs/${loop.slug}/state/tasks/task-${id}/canon-review.md e refaça manualmente` }
+        }
+        const commit = review.commit ?? sensors.taskCommits[id]
+        if (!commit) {
+          return { kind: "abort", because: `revisão da task ${id} FAIL mas sem commit para desfazer (canon-review.json.commit e manifest.validatedCommit ausentes)` }
+        }
+        return { kind: "undo", taskId: id, commit, because: `revisão canônica FAIL na task ${id} — desfaz-e-refaz (tentativa ${retries + 1}/${opts.reviewMaxAttempts})` }
+      }
+    }
+    // Qualquer task COMPLETE sem review aceito → dispara /j.review-task.
+    for (const id of sensors.completedIds) {
+      if (!acceptedTaskReview(sensors, loop, id)) {
+        return { kind: "run", command: "/j.review-task", because: `task ${id} completa e sem canon-review PASS aceito — revisar antes de seguir`, reviewTaskId: id }
+      }
+    }
+  }
+
   if (sensors.pendingIds.length > 0) {
     return {
       kind: "run",
@@ -527,6 +703,9 @@ function initLoopState(workspace: string, slug: string, until: Until): LoopState
     lastCheckFailureCount: previous.lastCheckFailureCount ?? null,
     lastFailureReviewMtimeMs: previous.lastFailureReviewMtimeMs ?? null,
     infraRetryUsed: previous.infraRetryUsed ?? false,
+    reviewRetries: previous.reviewRetries ?? {},
+    planReviewAttempts: previous.planReviewAttempts ?? 0,
+    reviewDispatchedAt: previous.reviewDispatchedAt ?? {},
   }
 }
 
@@ -563,14 +742,38 @@ function runOpencode(workspace: string, command: string, timeoutMs: number): { e
   return { exitCode: result.status, stdoutTail, timedOut, spawnError }
 }
 
+function gitHead(repo: string): string | null {
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repo, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim() || null
+  } catch {
+    return null
+  }
+}
+
+function gitResetHard(repo: string, ref: string): boolean {
+  try {
+    execFileSync("git", ["reset", "--hard", ref], { cwd: repo, stdio: ["ignore", "ignore", "ignore"] })
+    return true
+  } catch {
+    return false
+  }
+}
+
 function formatSensorSummary(sensors: Sensors, loop: LoopState, opts: DecisionOptions): string[] {
   const review = sensors.checkReview
   const reviewLine = review
     ? `${review.stale ? "stale" : "fresh"} ${review.verdict} (falhas=${review.failureCount} hash=${review.failureHash.slice(0, 8)}${review.infraOnly ? " infra-only" : ""})`
     : "ausente"
+  const planReviewLine = sensors.planReview
+    ? `${sensors.planReview.fresh ? "fresh" : "stale"} ${sensors.planReview.verdict}`
+    : "ausente"
+  const taskReviewLine = sensors.completedIds.length > 0
+    ? sensors.completedIds.map((id) => `${id}=${acceptedTaskReview(sensors, loop, id)?.verdict ?? (sensors.taskReviews[id] ? "pendente" : "ausente")}`).join(" ")
+    : "(nenhuma completa)"
   return [
     `  tasks: ${sensors.completedIds.length}/${sensors.planTasks.length} completas` + (sensors.pendingIds.length > 0 ? ` (pendentes: ${sensors.pendingIds.join(", ")})` : ""),
     `  check-review: ${reviewLine}`,
+    `  reviews: plan=${planReviewLine}  tasks[${taskReviewLine}]`,
     `  reentries: ${loop.reentries}/${opts.maxCheckReentries}  unifyDone: ${loop.unifyDone}  infraRetryUsed: ${loop.infraRetryUsed}`,
   ]
 }
@@ -593,19 +796,29 @@ function main(): void {
   const workspace = args.workspace
   const slug = resolveSlug(workspace, args.slug)
 
-  const planPath = path.join(workspace, "docs", "specs", slug, "plan.md")
-  if (!existsSync(planPath)) {
-    die(`plan.md não encontrado para slug '${slug}' em ${planPath} (slug inexistente ou plano ainda não gerado)`)
-  }
-  if (parsePlanTasks(planPath).length === 0) {
-    die(`plan.md de '${slug}' não contém nenhuma task ("## Task N"): ${planPath}`)
-  }
-
   const config = loadJuninhoConfig(workspace)
   const opts: DecisionOptions = {
     until: args.until,
     maxCheckReentries: config.workflow?.implement?.maxCheckReentries ?? 2,
     unifyEnabled: config.workflow?.unify?.enabled ?? true,
+    reviewPlan: config.workflow?.review?.plan ?? true,
+    reviewImplement: config.workflow?.review?.implement ?? true,
+    reviewMaxAttempts: config.workflow?.review?.maxAttempts ?? 2,
+    automation: (config.workflow?.automation?.nonInteractive ?? false) && (config.workflow?.automation?.autoApproveArtifacts ?? false),
+  }
+
+  const planPath = path.join(workspace, "docs", "specs", slug, "plan.md")
+  // Janela do replan de automation (E6): um replan arquiva plan.md e a próxima
+  // iteração re-dispara /j.plan. Se o processo reinicia exatamente nessa janela,
+  // plan.md está ausente mas o replan continua pendente (plan-review.json presente
+  // + automation) — não morra: o loop dispara /j.plan e regenera o plano.
+  const replanPending = opts.reviewPlan && opts.automation && existsSync(planReviewPath(workspace, slug))
+  if (!existsSync(planPath)) {
+    if (!replanPending) {
+      die(`plan.md não encontrado para slug '${slug}' em ${planPath} (slug inexistente ou plano ainda não gerado)`)
+    }
+  } else if (parsePlanTasks(planPath).length === 0) {
+    die(`plan.md de '${slug}' não contém nenhuma task ("## Task N"): ${planPath}`)
   }
 
   const loop = initLoopState(workspace, slug, args.until)
@@ -615,17 +828,29 @@ function main(): void {
 
   for (let n = 1; n <= args.maxIterations; n++) {
     const sensors = readSensors(workspace, slug)
+
+    // Plan review APROVOU o plano (veredito PASS fresco) → zera o contador de
+    // tentativas. Um FAIL fresco NÃO reseta: em automation cada FAIL gera um
+    // replan+re-review, e o contador precisa acumular através desses ciclos para
+    // que o teto (decide()) eventualmente pare e chame o humano.
+    if (sensors.planReview && sensors.planReview.fresh && sensors.planReview.verdict === "PASS") {
+      loop.planReviewAttempts = 0
+    }
+
     const decision = decide(sensors, loop, opts)
 
     if (args.dryRun) {
       for (const line of formatSensorSummary(sensors, loop, opts)) ok(line)
       if (decision.kind === "run") ok(`decision: ${decision.command} — ${decision.because}`)
+      else if (decision.kind === "undo") ok(`decision: UNDO task ${decision.taskId} @ ${decision.commit} — ${decision.because}`)
+      else if (decision.kind === "replan") ok(`decision: REPLAN — ${decision.because}`)
       else if (decision.kind === "done") ok(`decision: DONE — ${decision.because}`)
       else {
         ok(`decision: ABORT — ${decision.because}`)
         if (decision.printRollback) printRollbackHint(sensors)
       }
-      // Sem execução o estado em disco não muda; a decisão seguinte seria idêntica.
+      // Sem execução o estado em disco não muda (o undo NUNCA reseta em dry-run);
+      // a decisão seguinte seria idêntica.
       process.exit(0)
     }
 
@@ -645,6 +870,108 @@ function main(): void {
       process.exit(2)
     }
 
+    // Desfaz-e-refaz executado pelo DRIVER (nunca em dry-run; o dry-run já saiu
+    // acima). Diferente do rollback de regressão do check (só impresso), o undo
+    // de review é ação do driver: reset --hard do commit reprovado + limpeza do
+    // state/manifest da task → próxima iteração vê a task PENDING → /j.implement.
+    if (decision.kind === "undo") {
+      const { taskId, commit } = decision
+      const { taskDir, runtimePath } = featureStateTaskPaths(workspace, slug, taskId)
+      let targetRepoRoot: string | null = null
+      try {
+        targetRepoRoot = (JSON.parse(readFileSync(runtimePath, "utf-8")) as { targetRepoRoot?: string }).targetRepoRoot ?? null
+      } catch {
+        targetRepoRoot = null
+      }
+      if (!targetRepoRoot) {
+        loop.status = "aborted"
+        loop.abortReason = `undo da task ${taskId} impossível: sem targetRepoRoot em ${runtimePath}`
+        saveLoopState(workspace, slug, loop)
+        ok(`[loop] ABORT — ${loop.abortReason}`)
+        process.exit(2)
+      }
+      const repo = path.isAbsolute(targetRepoRoot) ? targetRepoRoot : path.join(workspace, targetRepoRoot)
+      const head = gitHead(repo)
+      if (head !== commit) {
+        // O commit revisado não é mais o HEAD: outra task (ou um humano) empilhou
+        // commits por cima. Um reset --hard aqui apagaria trabalho não revisado.
+        loop.status = "aborted"
+        loop.abortReason = `undo da task ${taskId} abortado: HEAD (${head ?? "?"}) != commit revisado (${commit}) em ${repo} — commits empilharam; desfaça manualmente`
+        saveLoopState(workspace, slug, loop)
+        ok(`[loop] ABORT — ${loop.abortReason}`)
+        process.exit(2)
+      }
+      if (!gitResetHard(repo, `${commit}^`)) {
+        loop.status = "aborted"
+        loop.abortReason = `undo da task ${taskId} falhou: git reset --hard ${commit}^ não completou em ${repo}`
+        saveLoopState(workspace, slug, loop)
+        ok(`[loop] ABORT — ${loop.abortReason}`)
+        process.exit(2)
+      }
+      rmSync(taskDir, { recursive: true, force: true })
+      removeTaskFromManifest(workspace, slug, taskId)
+      loop.reviewRetries[taskId] = (loop.reviewRetries[taskId] ?? 0) + 1
+      loop.iterations.push({
+        n,
+        command: `undo:task-${taskId}`,
+        decidedBecause: decision.because,
+        startedAt: new Date().toISOString(),
+        durationMs: 0,
+        exitCode: null,
+        stateHashAfter: readSensors(workspace, slug).stateHash,
+        outcomeSummary: `reset --hard ${commit}^ em ${repo}; state/tasks/task-${taskId} removido; manifest limpo; reviewRetries[${taskId}]=${loop.reviewRetries[taskId]}`,
+      })
+      saveLoopState(workspace, slug, loop)
+      ok(`[loop] iter ${n}/${args.maxIterations} — UNDO task ${taskId} — reset ${repo} → ${commit}^ (tentativa ${loop.reviewRetries[taskId]}/${opts.reviewMaxAttempts})`)
+      continue
+    }
+
+    // E6 — Replan em automation: arquiva o plano rejeitado e deixa a PRÓXIMA
+    // iteração re-disparar /j.plan (decide() vê plan.md ausente + plan-review.json
+    // presente). Só chega aqui em automation (decide() gateia); nunca em dry-run (o
+    // dry-run já saiu acima) e NUNCA em modo interativo (lá a decisão é ABORT, que
+    // deixa plan.md no lugar pro humano). Arquivar em vez de deletar preserva o
+    // histórico e mata o plano ativo, evitando que o `die` de plan.md ausente re-arme.
+    if (decision.kind === "replan") {
+      if (!existsSync(planPath)) {
+        loop.status = "aborted"
+        loop.abortReason = `replan de '${slug}' impossível: plan.md ausente em ${planPath} (arquivamento já ocorreu?)`
+        saveLoopState(workspace, slug, loop)
+        ok(`[loop] ABORT — ${loop.abortReason}`)
+        process.exit(2)
+      }
+      const stateDir = featureStateDir(workspace, slug)
+      mkdirSync(stateDir, { recursive: true })
+      let rejectedIndex = 1
+      while (existsSync(path.join(stateDir, `plan.rejected-${rejectedIndex}.md`))) rejectedIndex++
+      const archivedPath = path.join(stateDir, `plan.rejected-${rejectedIndex}.md`)
+      renameSync(planPath, archivedPath)
+      loop.iterations.push({
+        n,
+        command: "replan:archive-plan",
+        decidedBecause: decision.because,
+        startedAt: new Date().toISOString(),
+        durationMs: 0,
+        exitCode: null,
+        stateHashAfter: readSensors(workspace, slug).stateHash,
+        outcomeSummary: `plan.md arquivado em ${archivedPath}; próxima iteração re-dispara /j.plan (feedback em ${planReviewPath(workspace, slug).replace(/\.json$/, ".md")})`,
+      })
+      saveLoopState(workspace, slug, loop)
+      ok(`[loop] iter ${n}/${args.maxIterations} — REPLAN — plano rejeitado arquivado em ${archivedPath}; próxima iteração re-dispara /j.plan`)
+      continue
+    }
+
+    // Anti-forja: registra o instante do dispatch de /j.review-task ANTES de rodar,
+    // para que o canon-review.json produzido nesta iteração (mtime posterior) seja
+    // aceito e um veredito pré-forjado pelo produtor (mtime anterior) seja recusado.
+    if (decision.command === "/j.review-task" && decision.reviewTaskId) {
+      loop.reviewDispatchedAt[decision.reviewTaskId] = Date.now()
+    }
+    // Teto de dispatch de /j.review-plan: conta a tentativa ANTES de rodar.
+    if (decision.command === "/j.review-plan") {
+      loop.planReviewAttempts += 1
+    }
+
     // Memória de guarda registrada ANTES de executar a reentrada, para que a
     // próxima leitura do check compare contra este pass. O mtime registra a
     // GERAÇÃO do check-review de origem: fingerprints só são comparados entre
@@ -662,7 +989,13 @@ function main(): void {
 
     const iterationStartedAt = new Date().toISOString()
     const startedMs = Date.now()
-    const run = runOpencode(workspace, decision.command, timeoutMs)
+    // /j.plan (replan de automation): re-dispara o planner com o slug e um ponteiro
+    // pro feedback da revisão — o planner respeita workflow.automation e relê o
+    // plan-review.md. O log/histórico registra o comando literal (decision.command).
+    const runMessage = decision.command === "/j.plan"
+      ? `/j.plan revise ${slug} — plano rejeitado pela revisão canônica; leia docs/specs/${slug}/state/plan-review.md e resolva os pontos levantados ou cite a task que autoriza a divergência`
+      : decision.command
+    const run = runOpencode(workspace, runMessage, timeoutMs)
     const durationMs = Date.now() - startedMs
 
     if (run.spawnError) {
