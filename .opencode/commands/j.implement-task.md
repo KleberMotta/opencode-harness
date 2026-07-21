@@ -84,7 +84,7 @@ Task contract:
 - implementerWorkPath: {absolute workspace path to state/implementer-work.md}
 - integrationStatePath: {absolute workspace path to state/integration-state.json}
 - taskFiles: {comma-separated absolute file paths resolved from the task Files section}
-- activePlanPath: /Users/kleber.motta/repos/.opencode/state/active-plan.json
+- activePlanPath: .opencode/state/active-plan.json
 ```
 
 Every path in the delegated task contract MUST be absolute. Spec artifacts resolve from `$WORKSPACE_ROOT/docs/specs/{feature-slug}/`; task files resolve from `$TARGET_REPO_ROOT/`. Do not pass relative `docs/specs/...` paths to the subagent.

@@ -16,7 +16,7 @@ Invoke the `@j.implementer` agent to build what was planned or specified.
 /j.implement
 /j.implement the authentication middleware
 /j.implement docs/specs/user-profile.md
-/j.implement /Users/kleber.motta/repos/contexts/trp/trp-seller-api
+/j.implement contexts/trp/trp-seller-api
 ```
 
 ## What happens

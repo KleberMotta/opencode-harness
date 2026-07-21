@@ -20,7 +20,7 @@
 
 ## Evals
 
-- Deterministic suite: PASS, 130 pass / 0 fail, 690 `expect()` calls across 6 files (`TMPDIR=/Users/kleber.motta/repos/tmp npm run eval`), after final reviewer-hardening regressions.
+- Deterministic suite: PASS, 130 pass / 0 fail, 690 `expect()` calls across 6 files (`TMPDIR=tmp npm run eval`), after final reviewer-hardening regressions.
 - Behavioral implement-loop: PASS, ready, 1/1.
 - Behavioral check-loop: PASS, ready, 1/1.
 - Behavioral unify-loop: PASS, ready, 1/1.
@@ -31,12 +31,12 @@
 ## Reproducible SellerOutput Replay
 
 ```bash
-TMPDIR=/Users/kleber.motta/repos/tmp bun .opencode/cli/canon-audit.ts \
+TMPDIR=tmp bun .opencode/cli/canon-audit.ts \
   --commit 02419ac6bdf4631ffbe1dd30285514233b7e12bf \
-  --output /Users/kleber.motta/repos/tmp/seller-output-audit-v2.json \
-  --plan /Users/kleber.motta/repos/docs/specs/pgw-9562-seller-preferences/plan.md \
+  --output tmp/seller-output-audit-v2.json \
+  --plan docs/specs/pgw-9562-seller-preferences/plan.md \
   --task 1 \
-  --files /Users/kleber.motta/repos/contexts/trp/trp-seller-api/src/main/kotlin/br/com/olx/trp/seller/domain/seller/model/SellerOutput.kt
+  --files contexts/trp/trp-seller-api/src/main/kotlin/br/com/olx/trp/seller/domain/seller/model/SellerOutput.kt
 ```
 
 Expected generated evidence:

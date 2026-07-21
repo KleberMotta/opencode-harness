@@ -11,7 +11,7 @@ Creating or editing any `AGENTS.md` file.
 ## Required Steps
 
 1. **Find your position in the injection stack before writing a word.**
-   `/Users/kleber.motta/repos/.opencode/plugins/j.directory-agents-injector.ts` decides what the agent actually sees:
+   `.opencode/plugins/j.directory-agents-injector.ts` decides what the agent actually sees:
    - `findAgentsMdFiles(filePath, projectRoot)` starts at `path.dirname(filePath)` and walks up while `current !== projectRoot` — the loop is **exclusive**, so the project-root `AGENTS.md` is never injected by the plugin (its own comment: *root AGENTS.md is auto-loaded by OpenCode*).
    - `findContextAgentsMd` resolves every inherited `.context/AGENTS.md` and injects ancestor → nearest.
    - Nothing outside the project fires at all: the handler returns early unless `filePath.startsWith(directory)`.
@@ -26,7 +26,7 @@ Creating or editing any `AGENTS.md` file.
 
 2. **Read every AGENTS.md already on that path.** For a file under `contexts/trp/trp-financial-api`, that includes inherited `.context/AGENTS.md`, repo root `AGENTS.md`, and nested `src/.../AGENTS.md`. Your file carries only the delta.
 
-3. **Use the section set for your level.** Measured from `/Users/kleber.motta/repos/contexts/trp/trp-financial-api`:
+3. **Use the section set for your level.** Measured from `contexts/trp/trp-financial-api`:
 
    | Level | Sections |
    |---|---|
@@ -47,7 +47,7 @@ Creating or editing any `AGENTS.md` file.
 
 ## Canonical Example
 
-`/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/resources/db/migration/AGENTS.md` — complete, delta-only, one screen:
+`contexts/trp/trp-financial-api/src/main/resources/db/migration/AGENTS.md` — complete, delta-only, one screen:
 
 ```markdown
 # Flyway Migration Guide
@@ -78,8 +78,8 @@ This directory holds production schema and data migrations for the financial dat
 Read it against the root file it stacks under: it never restates the stack, the layout, or the command table. `make lint` reappears only to say *which* check this directory trips (Spotless on SQL) — that is a delta, not an echo.
 
 Two more to read before writing your own:
-- `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/domain/cashout/AGENTS.md` — `Boundaries` used correctly (`configuration/`, `provider/`, `service/`).
-- `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/security/AGENTS.md` — pitfalls written as blast radius (a broken principal mapping cascades into auditing).
+- `contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/domain/cashout/AGENTS.md` — `Boundaries` used correctly (`configuration/`, `provider/`, `service/`).
+- `contexts/trp/trp-financial-api/src/main/kotlin/br/com/olx/trp/financial/security/AGENTS.md` — pitfalls written as blast radius (a broken principal mapping cascades into auditing).
 
 ## RED_LINES
 
