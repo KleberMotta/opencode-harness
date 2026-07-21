@@ -16,3 +16,8 @@
 
 # Inside tmp/, ignore all contents (keep the folder via .gitkeep if desired)
 /tmp/*
+
+# Generated eval reports — behavioral outputs, regenerated per run and full of
+# machine-absolute sandbox paths; keep the folder, never commit the contents.
+/.opencode/evals/reports/*
+!/.opencode/evals/reports/.gitkeep

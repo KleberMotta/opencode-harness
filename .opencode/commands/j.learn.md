@@ -73,9 +73,9 @@ The orchestrator MUST execute these phases in order. This command is **synchrono
 
 ### Phase 4 — Regression gate
 
-9. Run the full deterministic suite:
+9. Run the full deterministic suite (from the workspace project root, where opencode was launched):
    ```
-   cd /Users/kleber.motta/repos && TMPDIR=/Users/kleber.motta/repos/tmp npm run eval
+   TMPDIR="$PWD/tmp" npm run eval
    ```
    (57+ tests; must stay green.)
 10. If the surface is a **plugin, carl, runtime, or skill**, also run the matching behavioral impact suite (these need `~/.opencode/bin` on PATH):
@@ -131,6 +131,6 @@ After completion, print a structured summary:
 
 ## Notes for the orchestrator
 
-- This command is **synchronous**. Run everything with absolute paths in `/Users/kleber.motta/repos`; never rely on `cd` chains.
+- This command is **synchronous**. Run from the workspace project root (where opencode was launched) and anchor paths on it (e.g. `"$PWD/..."` or paths relative to it), not on a machine-specific absolute path; never rely on `cd` chains.
 - Use `read`/`grep`/`glob` to inspect surfaces, `edit`/`write` to apply, `bash` for evals and git.
 - **Model-specific caveat:** a rule validated under one model may not hold after `model:set` — when the model changes, recommend re-running the relevant `eval:behavioral:impact:*` suites to revalidate learned rules.

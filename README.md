@@ -38,7 +38,7 @@ Rode `bun run setup` sempre que quiser reconferir. O que cada check significa:
 Sem plano ativo, o check de hooks vira um aviso — instale o hook em cada repo-alvo antes do primeiro `/j.implement`:
 
 ```bash
-bun run hooks:install -- --repo /Users/kleber.motta/repos/contexts/trp/trp-seller-api
+bun run hooks:install -- --repo contexts/trp/trp-seller-api
 ```
 
 Isso gera `scripts/pre-commit.sh` **dentro** do repo-alvo (stack-aware, commitável) e instala o symlink `.git/hooks/pre-commit → ../../scripts/pre-commit.sh` (local, não versionado). O `@j.implementer` verifica que o hook existe antes de commitar e falha com instruções se não existir. É idempotente — pode re-rodar.
@@ -92,7 +92,7 @@ Delega para `@j.planner`, que roda Metis (classifica intent, spawna `@j.explore`
   "specPath": "docs/specs/seller-identity-retry/spec.md",
   "contextPath": "docs/specs/seller-identity-retry/CONTEXT.md",
   "writeTargets": [
-    { "project": "trp-seller-api", "targetRepoRoot": "/Users/kleber.motta/repos/contexts/trp/trp-seller-api" }
+    { "project": "trp-seller-api", "targetRepoRoot": "contexts/trp/trp-seller-api" }
   ],
   "referenceProjects": [
     { "project": "olxbr/trp-financial-api", "reason": "Canon de teste/client; somente leitura." }
@@ -286,7 +286,7 @@ bun run state:clear-task -- seller-identity-retry task-3     # zera o state de u
 ### O plano ativo está errado / apontando para outra feature
 
 ```
-/j.activate-plan /Users/kleber.motta/repos/contexts/trp/trp-seller-api/docs/specs/{slug}/plan.md
+/j.activate-plan contexts/trp/trp-seller-api/docs/specs/{slug}/plan.md
 ```
 ```bash
 bun run plan:activate -- contexts/trp/trp-seller-api seller-identity-retry

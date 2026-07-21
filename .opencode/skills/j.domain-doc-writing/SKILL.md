@@ -12,9 +12,9 @@ Creating or editing any file under `docs/domain/`, including `docs/domain/INDEX.
 
 1. **Write the doc against the code, not against memory.** Open the services, entities, and controllers that own the flow and describe what they do now. `docs/domain/*` answers *what the business does*; `AGENTS.md` answers *how to work in this directory*; `docs/principles/*` answers *which technical pattern applies across modules*.
 
-2. **Use the section set from the canon.** `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/cashout.md`: `Resumo do dominio` → `Fontes de verdade` (the code paths that justify the doc) → `Entradas e saidas` (per entrypoint: endpoint, headers, payload, failures, result) → then the domain's states, limits, and edge cases. Write in the language the repo's docs already use.
+2. **Use the section set from the canon.** `contexts/trp/trp-financial-api/docs/domain/cashout.md`: `Resumo do dominio` → `Fontes de verdade` (the code paths that justify the doc) → `Entradas e saidas` (per entrypoint: endpoint, headers, payload, failures, result) → then the domain's states, limits, and edge cases. Write in the language the repo's docs already use.
 
-3. **Register the doc in `docs/domain/INDEX.md` in the exact parsed format.** `parseDomainIndex` in `/Users/kleber.motta/repos/.opencode/plugins/j.carl-inject.ts` is the only thing that turns a file on disk into an injected doc:
+3. **Register the doc in `docs/domain/INDEX.md` in the exact parsed format.** `parseDomainIndex` in `.opencode/plugins/j.carl-inject.ts` is the only thing that turns a file on disk into an injected doc:
 
    ```ts
    const sections = content.split(/^## /m).slice(1)
@@ -36,11 +36,11 @@ Creating or editing any file under `docs/domain/`, including `docs/domain/INDEX.
 
 4. **Pick keywords that are the domain's own vocabulary, in every language the team types.** The canon's `cashout` entry recalls on `cashout, saque, repasse, transfer`; `accounting` recalls on `accounting, contabil, contabilidade, lancamento, fechamento, close-day, period-close, ...`. None of them is a word from the generic list, and each is a word someone would actually type in a task.
 
-5. **Add sync markers that name the code, and know what they are worth.** `<!-- juninho:sync source=... hash=... -->` is read by `/Users/kleber.motta/repos/.opencode/commands/j.sync-docs.md` as a human/agent pointer during a refresh. No plugin parses it — grep `juninho:sync` across `.opencode/` and the only hits are this skill, the principle skill, and that command. So: `source=` is the load-bearing half (it is checkable — the path exists or it does not), and `hash=` is a free-text label, not a content hash. The docs on disk carry `hash=finish`, `hash=manual`, `hash=scan`, `hash=fix`, and short hex strings, and nothing recomputes or validates any of them. Write `source=` with a real path; use `hash=` to say who last touched it (`manual`) and never rely on it to detect drift.
+5. **Add sync markers that name the code, and know what they are worth.** `<!-- juninho:sync source=... hash=... -->` is read by `.opencode/commands/j.sync-docs.md` as a human/agent pointer during a refresh. No plugin parses it — grep `juninho:sync` across `.opencode/` and the only hits are this skill, the principle skill, and that command. So: `source=` is the load-bearing half (it is checkable — the path exists or it does not), and `hash=` is a free-text label, not a content hash. The docs on disk carry `hash=finish`, `hash=manual`, `hash=scan`, `hash=fix`, and short hex strings, and nothing recomputes or validates any of them. Write `source=` with a real path; use `hash=` to say who last touched it (`manual`) and never rely on it to detect drift.
 
 ## Canonical Example
 
-The pair that makes `cashout.md` reachable. `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/INDEX.md`:
+The pair that makes `cashout.md` reachable. `contexts/trp/trp-financial-api/docs/domain/INDEX.md`:
 
 ```markdown
 ## cashout
@@ -49,7 +49,7 @@ Files:
   - cashout.md — Cashout and transfer domain
 ```
 
-And the head of `/Users/kleber.motta/repos/contexts/trp/trp-financial-api/docs/domain/cashout.md` it points at:
+And the head of `contexts/trp/trp-financial-api/docs/domain/cashout.md` it points at:
 
 ```markdown
 <!-- juninho:sync source=src/main/kotlin/br/com/olx/trp/financial/domain/cashout/service/CashoutCreateService.kt hash=manual -->
